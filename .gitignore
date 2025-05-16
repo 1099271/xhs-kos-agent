@@ -1,0 +1,27 @@
+# 虚拟环境
+venv/
+env/
+.venv/
+
+# 缓存和临时文件
+__pycache__/
+*.py[cod]
+*$py.class
+
+# 日志和数据库文件
+*.log
+*.sqlite3
+
+# IDE 和编辑器配置
+.idea/
+.vscode/
+.cursor/
+.cursorignore
+
+# 构建和分发文件
+dist/
+build/
+*.egg-info
+
+# 环境变量文件
+.env
