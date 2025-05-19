@@ -1,3 +1,0 @@
-[submodule "apps/ingest/xhs_spider"]
-	path = apps/ingest/xhs_spider
-	url = git@github.com:1099271/Spider_XHS.git
