@@ -5,6 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "aiomysql>=0.2.0",
     "dotenv>=0.9.9",
     "fastapi>=0.115.12",
     "langchain[anthropic,openai]>=0.3.25",

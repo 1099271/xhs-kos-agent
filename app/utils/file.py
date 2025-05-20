@@ -3,7 +3,7 @@ import os
 from datetime import datetime
 from typing import Any  # 导入 Any
 
-from app.utils.logger import info, warning
+from app.utils.logger import app_logger as logger
 
 
 def save_json_response(data_to_save: Any, log_file_prefix: str = "generic"):
@@ -27,7 +27,7 @@ def save_json_response(data_to_save: Any, log_file_prefix: str = "generic"):
         os.makedirs(full_log_dir, exist_ok=True)
 
         filename = os.path.join(full_log_dir, f"{timestamp_str}.log")  # 默认用 .log
-        info(f"{filename}已经保存")
+        logger.info(f"{filename}已经保存")
 
         # 保存数据到文件
         with open(filename, "w", encoding="utf-8") as f:
@@ -36,20 +36,20 @@ def save_json_response(data_to_save: Any, log_file_prefix: str = "generic"):
                 json.dump(data_to_save, f, ensure_ascii=False, indent=2)
                 # 如果成功保存为 JSON，可以考虑将文件重命名为 .json
                 # 但为了简化，我们统一使用 .log 或在下面记录信息
-                # info(f"Data successfully saved as JSON to: {filename}")
+                # logger.info(f"Data successfully saved as JSON to: {filename}")
             except TypeError:
                 # 如果 JSON 序列化失败，作为普通字符串保存
-                # info(f"Data is not JSON serializable, saving as plain string to: {filename}")
+                # logger.info(f"Data is not JSON serializable, saving as plain string to: {filename}")
                 f.seek(0)  # 回到文件开头
                 f.truncate()  # 清空可能已写入的部分 JSON
                 f.write(str(data_to_save))
-                # info(f"Data successfully saved as plain string to: {filename}")
+                # logger.info(f"Data successfully saved as plain string to: {filename}")
 
         return filename
     except Exception as e:
         # 捕获所有可能的异常 (权限、IO错误等)
         log_filename = filename if filename else "unknown file"
-        warning(
+        logger.warning(
             f"Error saving data to {log_filename} (prefix: {log_file_prefix}): {e}",
             exc_info=False,
         )
