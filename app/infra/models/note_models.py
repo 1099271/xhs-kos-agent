@@ -11,9 +11,11 @@ from sqlalchemy import (
     Text,
 )
 from sqlalchemy.orm import relationship
-from pydantic import BaseModel
-from typing import Optional, List, Any, Dict
 from app.infra.db.async_database import Base
+
+from app.infra.models.author_models import XhsAuthor
+from app.infra.models.comment_models import XhsComment
+from app.infra.models.keyword_models import XhsKeywordGroupNote
 
 
 class XhsNote(Base):
@@ -22,8 +24,8 @@ class XhsNote(Base):
     __tablename__ = "xhs_notes"
 
     note_id = Column(String(64), primary_key=True, index=True, comment="笔记ID")
-    auther_user_id = Column(
-        String(64), ForeignKey("xhs_authers.auther_user_id"), comment="作者用户ID"
+    author_user_id = Column(
+        String(64), ForeignKey("xhs_authors.author_user_id"), comment="作者用户ID"
     )
     note_url = Column(String(255), nullable=False, comment="笔记URL")
     note_xsec_token = Column(String(255), nullable=True, comment="笔记xsec令牌")
@@ -41,12 +43,12 @@ class XhsNote(Base):
     note_sticky = Column(Boolean, nullable=True, default=False, comment="是否置顶")
 
     # 作者相关的冗余字段
-    auther_user_id = Column(
-        String(64), ForeignKey("xhs_authers.auther_user_id"), comment="作者用户ID"
+    author_user_id = Column(
+        String(64), ForeignKey("xhs_authors.author_user_id"), comment="作者用户ID"
     )
-    auther_nick_name = Column(String(128), nullable=True, comment="作者昵称（冗余）")
-    auther_avatar = Column(String(255), nullable=True, comment="作者头像URL（冗余）")
-    auther_home_page_url = Column(
+    author_nick_name = Column(String(128), nullable=True, comment="作者昵称（冗余）")
+    author_avatar = Column(String(255), nullable=True, comment="作者头像URL（冗余）")
+    author_home_page_url = Column(
         String(255), nullable=True, comment="作者主页URL（冗余）"
     )
     note_status = Column(Integer, nullable=False, default=1, comment="笔记状态")
@@ -56,7 +58,7 @@ class XhsNote(Base):
     )
 
     # 关系
-    auther = relationship("XhsAuther", back_populates="notes")
+    author = relationship("XhsAuthor", back_populates="notes")
     details = relationship("XhsNoteDetail", back_populates="note", uselist=False)
     comments = relationship("XhsComment", back_populates="note")
     keyword_group_notes = relationship("XhsKeywordGroupNote", back_populates="note")
@@ -88,8 +90,8 @@ class XhsNoteDetail(Base):
         String(64), ForeignKey("xhs_notes.note_id"), primary_key=True, comment="笔记ID"
     )
     note_url = Column(String(255), nullable=False, comment="笔记URL")
-    auther_user_id = Column(
-        String(64), ForeignKey("xhs_authers.auther_user_id"), comment="作者用户ID"
+    author_user_id = Column(
+        String(64), ForeignKey("xhs_authors.author_user_id"), comment="作者用户ID"
     )
     note_last_update_time = Column(DateTime, nullable=True, comment="最后更新时间")
     note_create_time = Column(DateTime, nullable=True, comment="创建时间")
@@ -119,90 +121,4 @@ class XhsNoteDetail(Base):
 
     # 关系
     note = relationship("XhsNote", back_populates="details")
-    auther = relationship("XhsAuther", back_populates="note_details")
-
-
-class XhsNoteItem(BaseModel):
-    note_id: str
-    note_url: Optional[str] = None
-    note_xsec_token: Optional[str] = None
-    auther_user_id: Optional[str] = None
-    auther_nick_name: Optional[str] = None
-    auther_avatar: Optional[str] = None
-    auther_home_page_url: Optional[str] = None
-    note_display_title: Optional[str] = None
-    note_cover_url_pre: Optional[str] = None
-    note_cover_url_default: Optional[str] = None
-    note_cover_width: Optional[str] = None
-    note_cover_height: Optional[str] = None
-    note_liked_count: Optional[str] = None
-    note_liked: Optional[bool] = None
-    note_card_type: Optional[str] = None
-    note_model_type: Optional[str] = None
-
-    model_config = {"from_attributes": True}
-
-
-class XhsSearchResponse(BaseModel):
-    data: List[XhsNoteItem]
-    msg: str = ""
-    tips: Optional[str] = None
-    code: int = 0
-
-    model_config = {"from_attributes": True}
-
-
-class SearchNoteRequest(BaseModel):
-    req_info: Dict[str, Any]
-    req_body: XhsSearchResponse
-
-
-class XhsNoteDetailItem(BaseModel):
-    note_last_update_time: Optional[str] = None
-    note_model_type: Optional[str] = None
-    video_h266_url: Optional[str] = None
-    auther_avatar: Optional[str] = None
-    note_card_type: Optional[str] = None
-    note_desc: Optional[str] = None
-    comment_count: Optional[str] = None
-    note_liked_count: Optional[str] = None
-    share_count: Optional[str] = None
-    video_a1_url: Optional[str] = None
-    auther_home_page_url: Optional[str] = None
-    auther_user_id: Optional[str] = None
-    collected_count: Optional[str] = None
-    note_url: Optional[str] = None
-    video_id: Optional[str] = None
-    note_create_time: Optional[str] = None
-    note_display_title: Optional[str] = None
-    note_image_list: Optional[List[str]] = None
-    note_tags: Optional[List[str]] = None
-    video_h264_url: Optional[str] = None
-    video_h265_url: Optional[str] = None
-    auther_nick_name: Optional[str] = None
-    note_duration: Optional[str] = None
-    note_id: str
-    note_liked: Optional[bool] = None
-    collected: Optional[bool] = None
-
-    model_config = {"from_attributes": True}
-
-
-class XhsNoteDetailData(BaseModel):
-    note: XhsNoteDetailItem
-
-    model_config = {"from_attributes": True}
-
-
-class XhsNoteDetailResponse(BaseModel):
-    data: XhsNoteDetailData
-    msg: str = ""
-    tips: Optional[str] = None
-    code: int = 0
-
-    model_config = {"from_attributes": True}
-
-
-class NoteDetailRequest(BaseModel):
-    req_info: Dict[str, Any]
-    req_body: XhsNoteDetailResponse
+    author = relationship("XhsAuthor", back_populates="note_details")

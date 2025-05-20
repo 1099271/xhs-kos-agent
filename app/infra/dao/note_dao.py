@@ -6,7 +6,7 @@ from app.infra.models.note_models import (
 from app.infra.models.author_models import XhsAuthor
 from app.infra.models.keyword_models import XhsKeywordGroupNote
 from app.infra.dao.keyword_dao import KeywordDAO
-from app.infra.models.note_models import XhsSearchResponse
+from app.schemas.note_schemas import XhsSearchResponse
 from typing import List, Dict, Any
 from datetime import datetime
 import traceback
@@ -29,15 +29,15 @@ class NoteDAO:
         await db.rollback()
 
         try:
-            # 1. 首先收集所有需要处理的note_ids和auther_ids
+            # 1. 首先收集所有需要处理的note_ids和author_ids
             note_ids = [note.note_id for note in search_response.data]
-            auther_ids = [note.auther_user_id for note in search_response.data]
+            author_ids = [note.author_user_id for note in search_response.data]
 
             logger.info(f"开始处理 {len(note_ids)} 条笔记数据")
 
             # 2. 批量查询已存在的笔记和作者
             existing_notes = {}
-            existing_authers = {}
+            existing_authors = {}
 
             # 查询笔记
             try:
@@ -52,27 +52,27 @@ class NoteDAO:
             # 查询作者
             try:
                 stmt = select(XhsAuthor).filter(
-                    XhsAuthor.auther_user_id.in_(auther_ids)
+                    XhsAuthor.author_user_id.in_(author_ids)
                 )
                 result = await db.execute(stmt)
-                authers = result.scalars().all()
-                existing_authers = {auther.auther_user_id: auther for auther in authers}
-                logger.info(f"找到 {len(existing_authers)} 个已存在的作者")
+                authors = result.scalars().all()
+                existing_authors = {author.author_user_id: author for author in authors}
+                logger.info(f"找到 {len(existing_authors)} 个已存在的作者")
             except Exception as e:
                 logger.error(f"查询作者信息时出错: {str(e)}")
 
                 # 尝试单独查询每个作者，以便找出问题所在
-                for auther_id in auther_ids:
+                for author_id in author_ids:
                     try:
                         stmt = select(XhsAuthor).filter(
-                            XhsAuthor.auther_user_id == auther_id
+                            XhsAuthor.author_user_id == author_id
                         )
                         result = await db.execute(stmt)
-                        auther = result.scalars().first()
-                        if auther:
-                            existing_authers[auther.auther_user_id] = auther
+                        author = result.scalars().first()
+                        if author:
+                            existing_authors[author.author_user_id] = author
                     except Exception as e2:
-                        logger.error(f"查询单个作者 {auther_id} 时出错: {str(e2)}")
+                        logger.error(f"查询单个作者 {author_id} 时出错: {str(e2)}")
 
             # 3. 获取或创建关键词群组
             keyword_group = None
@@ -109,59 +109,59 @@ class NoteDAO:
             for note_item in search_response.data:
                 try:
                     # 处理作者信息
-                    auther_data = {
-                        "auther_user_id": (
-                            str(note_item.auther_user_id)
-                            if note_item.auther_user_id
+                    author_data = {
+                        "author_user_id": (
+                            str(note_item.author_user_id)
+                            if note_item.author_user_id
                             else ""
                         ),
-                        "auther_nick_name": (
-                            str(note_item.auther_nick_name)
-                            if note_item.auther_nick_name
+                        "author_nick_name": (
+                            str(note_item.author_nick_name)
+                            if note_item.author_nick_name
                             else ""
                         ),
-                        "auther_avatar": (
-                            str(note_item.auther_avatar)
-                            if note_item.auther_avatar
+                        "author_avatar": (
+                            str(note_item.author_avatar)
+                            if note_item.author_avatar
                             else ""
                         ),
-                        "auther_home_page_url": (
-                            str(note_item.auther_home_page_url)
-                            if note_item.auther_home_page_url
+                        "author_home_page_url": (
+                            str(note_item.author_home_page_url)
+                            if note_item.author_home_page_url
                             else ""
                         ),
-                        "auther_desc": "",  # 添加默认值
-                        "auther_interaction": 0,  # 根据数据库结构设置默认值为0
-                        "auther_ip_location": None,
-                        "auther_red_id": None,
-                        "auther_tags": None,
-                        "auther_fans": 0,
-                        "auther_follows": 0,
-                        "auther_gender": None,
+                        "author_desc": "",  # 添加默认值
+                        "author_interaction": 0,  # 根据数据库结构设置默认值为0
+                        "author_ip_location": None,
+                        "author_red_id": None,
+                        "author_tags": None,
+                        "author_fans": 0,
+                        "author_follows": 0,
+                        "author_gender": None,
                     }
 
                     # 获取或更新作者
-                    auther = existing_authers.get(note_item.auther_user_id)
-                    if auther:
+                    author = existing_authors.get(note_item.author_user_id)
+                    if author:
                         # 更新现有作者信息
-                        for key, value in auther_data.items():
-                            if hasattr(auther, key):
-                                setattr(auther, key, value)
-                        auther.updated_at = datetime.now()
-                        logger.info(f"更新作者信息: {auther.auther_user_id}")
+                        for key, value in author_data.items():
+                            if hasattr(author, key):
+                                setattr(author, key, value)
+                        author.updated_at = datetime.now()
+                        logger.info(f"更新作者信息: {author.author_user_id}")
                     else:
                         # 创建新作者
-                        auther = XhsAuthor(**auther_data)
-                        db.add(auther)
-                        existing_authers[auther.auther_user_id] = auther
-                        logger.info(f"创建新作者: {auther.auther_user_id}")
+                        author = XhsAuthor(**author_data)
+                        db.add(author)
+                        existing_authors[author.author_user_id] = author
+                        logger.info(f"创建新作者: {author.author_user_id}")
 
                     # 准备笔记数据（确保数值类型正确）
                     note_data = {
                         "note_id": str(note_item.note_id) if note_item.note_id else "",
-                        "auther_user_id": (
-                            str(note_item.auther_user_id)
-                            if note_item.auther_user_id
+                        "author_user_id": (
+                            str(note_item.author_user_id)
+                            if note_item.author_user_id
                             else ""
                         ),
                         "note_url": (
@@ -220,19 +220,19 @@ class NoteDAO:
                             if note_item.note_model_type
                             else ""
                         ),
-                        "auther_nick_name": (
-                            str(note_item.auther_nick_name)
-                            if note_item.auther_nick_name
+                        "author_nick_name": (
+                            str(note_item.author_nick_name)
+                            if note_item.author_nick_name
                             else ""
                         ),
-                        "auther_avatar": (
-                            str(note_item.auther_avatar)
-                            if note_item.auther_avatar
+                        "author_avatar": (
+                            str(note_item.author_avatar)
+                            if note_item.author_avatar
                             else ""
                         ),
-                        "auther_home_page_url": (
-                            str(note_item.auther_home_page_url)
-                            if note_item.auther_home_page_url
+                        "author_home_page_url": (
+                            str(note_item.author_home_page_url)
+                            if note_item.author_home_page_url
                             else ""
                         ),
                     }
@@ -257,7 +257,7 @@ class NoteDAO:
                     note_detail_data = {
                         "note_id": note.note_id,
                         "note_url": note.note_url,  # 从笔记中获取URL
-                        "auther_user_id": note.auther_user_id,
+                        "author_user_id": note.author_user_id,
                         "note_last_update_time": datetime.now(),
                         "note_create_time": datetime.now(),
                         "note_model_type": note.note_model_type,  # 从笔记中获取模型类型

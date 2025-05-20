@@ -4,7 +4,7 @@ from app.infra.models.note_models import XhsNote
 
 from app.services.coze.coze_services import CozeService
 from app.config.settings import settings
-from app.infra.models.note_models import XhsSearchResponse
+from app.schemas.note_schemas import XhsSearchResponse
 from app.infra.dao.note_dao import NoteDAO
 
 
