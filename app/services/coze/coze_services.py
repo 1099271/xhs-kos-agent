@@ -74,14 +74,14 @@ class CozeService:
         payload = {"parameters": parameters, "workflow_id": workflow_id}
 
         try:
-            latest_log = "logs/coze_http_request/20250520/174508932529.log"
-            with open(latest_log, "r", encoding="utf-8") as f:
-                resp_json = json.load(f)
+            # latest_log = "logs/coze_http_request/20250520/174508932529.log"
+            # with open(latest_log, "r", encoding="utf-8") as f:
+            #     resp_json = json.load(f)
 
-            # response = requests.post(url, headers=headers, json=payload)
-            # response.raise_for_status()  # 如果请求失败，抛出异常
-            # resp_json = response.json()
-            # save_json_response(resp_json, log_file_prefix="coze_http_request")
+            response = requests.post(url, headers=headers, json=payload)
+            response.raise_for_status()  # 如果请求失败，抛出异常
+            resp_json = response.json()
+            save_json_response(resp_json, log_file_prefix="coze_http_request")
 
             # 根据响应状态码处理逻辑
             match resp_json.get("code"):

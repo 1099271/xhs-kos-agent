@@ -16,6 +16,8 @@ from app.infra.db.async_database import Base
 from app.infra.models.author_models import XhsAuthor
 from app.infra.models.comment_models import XhsComment
 from app.infra.models.keyword_models import XhsKeywordGroupNote
+from app.infra.models.llm_models import LlmNoteDiagnosis, LlmCommentAnalysis
+from app.infra.models.tag_models import TagComparisonResult
 
 
 class XhsNote(Base):

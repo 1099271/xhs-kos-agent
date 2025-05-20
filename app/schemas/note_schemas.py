@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional, List, Any, Dict
 
 
@@ -6,10 +6,12 @@ class XhsNoteItem(BaseModel):
     note_id: str
     note_url: Optional[str] = None
     note_xsec_token: Optional[str] = None
-    author_user_id: Optional[str] = None
-    author_nick_name: Optional[str] = None
-    author_avatar: Optional[str] = None
-    author_home_page_url: Optional[str] = None
+    author_user_id: Optional[str] = Field(default=None, alias="auther_user_id")
+    author_nick_name: Optional[str] = Field(default=None, alias="auther_nick_name")
+    author_avatar: Optional[str] = Field(default=None, alias="auther_avatar")
+    author_home_page_url: Optional[str] = Field(
+        default=None, alias="auther_home_page_url"
+    )
     note_display_title: Optional[str] = None
     note_cover_url_pre: Optional[str] = None
     note_cover_url_default: Optional[str] = None

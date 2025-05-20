@@ -108,13 +108,16 @@ class NoteDAO:
             # 4. 处理每个笔记
             for note_item in search_response.data:
                 try:
+                    # 检查 author_user_id 是否为空
+                    if not note_item.author_user_id:
+                        logger.error(
+                            f"笔记 {getattr(note_item, 'note_id', '未知')} 的 author_user_id 为空，跳过处理"
+                        )
+                        continue
+
                     # 处理作者信息
                     author_data = {
-                        "author_user_id": (
-                            str(note_item.author_user_id)
-                            if note_item.author_user_id
-                            else ""
-                        ),
+                        "author_user_id": str(note_item.author_user_id),
                         "author_nick_name": (
                             str(note_item.author_nick_name)
                             if note_item.author_nick_name
@@ -159,11 +162,7 @@ class NoteDAO:
                     # 准备笔记数据（确保数值类型正确）
                     note_data = {
                         "note_id": str(note_item.note_id) if note_item.note_id else "",
-                        "author_user_id": (
-                            str(note_item.author_user_id)
-                            if note_item.author_user_id
-                            else ""
-                        ),
+                        "author_user_id": str(note_item.author_user_id),
                         "note_url": (
                             str(note_item.note_url) if note_item.note_url else ""
                         ),
