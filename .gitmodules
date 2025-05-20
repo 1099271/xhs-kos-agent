@@ -1,6 +1,3 @@
-[submodule "app/app/ingest/xhs_spider"]
-	path = app/app/ingest/xhs_spider
-	url = git@github.com:1099271/Spider_XHS.git
 [submodule "app/ingest/xhs_spider"]
 	path = app/ingest/xhs_spider
 	url = git@github.com:1099271/Spider_XHS.git
