@@ -3,19 +3,16 @@ import time
 import traceback
 from typing import List
 from sqlalchemy import text
-from loguru import logger
 
 from app.infra.models.note_models import XhsNote
-
+from app.utils.logger import app_logger as logger
 from app.services.coze.coze_service import CozeService
 from app.config.settings import settings
 from app.schemas.note_schemas import XhsSearchResponse
 from app.infra.dao.note_dao import NoteDAO
 from app.services.spider.spider_service import SpiderService
-
 from app.infra.db.async_database import get_async_db
 from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.services.note.note_detail_service import (
     get_note_detail_by_coze,
     get_note_detail_by_spider,

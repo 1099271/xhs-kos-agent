@@ -35,3 +35,16 @@ class SpiderService:
         else:
             logger.warning(f"获取笔记详情失败: {msg}")
             return {}
+
+    async def get_note_comments(self, note_url: str):
+        cookies_str = settings.XHS_COOKIE
+        success, msg, note_all_comment = self.spider_xhs.get_note_all_comment(
+            note_url, cookies_str
+        )
+        log_filename = save_json_response(note_all_comment, "spider_get_note_comments")
+
+        if success and note_all_comment:
+            return note_all_comment, log_filename
+        else:
+            logger.warning(f"获取笔记评论失败: {msg}")
+            return [], log_filename
