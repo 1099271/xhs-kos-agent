@@ -349,7 +349,6 @@ class NoteDAO:
 
         return stored_notes
 
-    # todo: 需要注意的是，这里没有存储笔记的xsec_token，需要后续补充
     async def store_spider_note_list(
         db: AsyncSession,
         tag: str,
@@ -427,10 +426,13 @@ class NoteDAO:
 
             for note_item_data in notes:
                 try:
+                    # 从根级别获取xsec_token
+
                     note_id = note_item_data.get("id")
-                    if not note_id:
+                    note_xsec_token = str(note_item_data.get("xsec_token", ""))
+                    if not note_id or not note_xsec_token:
                         logger.warning(
-                            f"笔记缺少ID，跳过: {note_item_data.get('note_card', {}).get('display_title', '未知标题')}"
+                            f"笔记缺少ID或xsec_token，跳过: {note_item_data.get('note_card', {}).get('display_title', '未知标题')}"
                         )
                         continue
 
@@ -445,6 +447,9 @@ class NoteDAO:
                     # 确保author_user_id是字符串
                     author_user_id = str(author_user_id)
 
+                    # 从用户信息中获取xsec_token作为备用
+                    user_xsec_token = str(user_info.get("xsec_token", ""))
+
                     author_data = {
                         "author_user_id": author_user_id,
                         "author_nick_name": str(
@@ -453,8 +458,7 @@ class NoteDAO:
                             or ""
                         ),
                         "author_avatar": str(user_info.get("avatar", "")),
-                        # 爬虫数据中无直接的 author_home_page_url, xsec_token, 先置空
-                        "author_home_page_url": f"https://www.xiaohongshu.com/user/profile/{author_user_id}",  # 可以尝试拼接
+                        "author_home_page_url": f"https://www.xiaohongshu.com/user/profile/{author_user_id}?xsec_token={user_xsec_token}&xsec_source=pc_note",  # 可以尝试拼接
                         "author_desc": "",
                         "author_interaction": 0,
                         "author_ip_location": None,
@@ -507,10 +511,8 @@ class NoteDAO:
                     note_main_data = {
                         "note_id": str(note_id),
                         "author_user_id": author_user_id,
-                        "note_url": f"https://www.xiaohongshu.com/explore/{note_id}",  # 爬虫数据中无xsec_token, 尝试拼接
-                        "note_xsec_token": str(
-                            user_info.get("xsec_token", "")
-                        ),  # 尝试从user_info获取
+                        "note_url": f"https://www.xiaohongshu.com/explore/{note_id}?xsec_token={note_xsec_token}&xsec_source=pc_note",
+                        "note_xsec_token": note_xsec_token,
                         "note_display_title": str(note_card.get("display_title", "")),
                         "note_cover_url_pre": str(cover_info.get("url_pre", "")),
                         "note_cover_url_default": str(
@@ -565,18 +567,24 @@ class NoteDAO:
                                 publish_time_str = p_info.get("text")
                                 break
 
-                    note_create_time = datetime.now()  # 默认为当前时间
+                    note_create_time = None  # 默认为空
                     if publish_time_str:
                         try:
-                            note_create_time = datetime.strptime(
-                                publish_time_str, "%Y-%m-%d"
-                            )
-                        except ValueError:
+                            # 尝试解析完整日期格式 (YYYY-MM-DD)
+                            try:
+                                note_create_time = datetime.strptime(
+                                    publish_time_str, "%Y-%m-%d"
+                                )
+                            except ValueError:
+                                # 如果是 MM-DD 格式，添加当前年份
+                                current_year = datetime.now().year
+                                note_create_time = datetime.strptime(
+                                    f"{current_year}-{publish_time_str}", "%Y-%m-%d"
+                                )
+                        except (ValueError, TypeError) as e:
                             logger.warning(
-                                f"笔记 {note_id} 的发布时间格式无法解析: {publish_time_str}, 使用当前时间"
+                                f"笔记 {note_id} 的发布时间解析失败: {publish_time_str}, 错误: {str(e)}"
                             )
-                            # 如果无法解析，则保留为当前时间或设置为 None，取决于业务需求
-                            # 这里我们默认使用当前时间，也可以考虑设置为 None 如果数据库允许
 
                     image_list_db = None
                     if note_card.get("image_list"):
@@ -600,6 +608,19 @@ class NoteDAO:
                                 f"序列化 image_list 失败: {note_id}, error: {e}"
                             )
 
+                    # 视频相关信息处理
+                    video_id = None
+                    video_h266_url = None
+                    video_a1_url = None
+                    video_h264_url = None
+                    video_h265_url = None
+                    note_duration = None
+
+                    # 判断是否为视频类型
+                    is_video = note_card.get("type") == "video"
+                    if is_video:
+                        note_obj.note_model_type = "video"
+
                     note_detail_data = {
                         "note_id": note_obj.note_id,
                         "note_url": note_obj.note_url,
@@ -614,12 +635,12 @@ class NoteDAO:
                         "note_liked_count": note_obj.note_liked_count,
                         "share_count": shared_count,
                         "collected_count": collected_count,
-                        "video_id": None,  # 爬虫的 search_some_note 结果不直接包含视频信息
-                        "video_h266_url": None,
-                        "video_a1_url": None,
-                        "video_h264_url": None,
-                        "video_h265_url": None,
-                        "note_duration": None,
+                        "video_id": video_id,
+                        "video_h266_url": video_h266_url,
+                        "video_a1_url": video_a1_url,
+                        "video_h264_url": video_h264_url,
+                        "video_h265_url": video_h265_url,
+                        "note_duration": note_duration,
                         "note_image_list": image_list_db,  # 存储 image_list
                         "note_tags": None,  # 爬虫的 search_some_note 结果不直接包含笔记标签
                         "note_liked": note_obj.note_liked,
@@ -657,12 +678,7 @@ class NoteDAO:
                                 retrieved_at=datetime.now(),
                             )
                             db.add(association)
-                            existing_associations.add(
-                                note_obj.note_id
-                            )  # 添加到已关联集合
-                            logger.info(
-                                f"创建笔记与标签 '{tag}' 的关联: {note_obj.note_id} -> group_id {keyword_group.group_id}"
-                            )
+                            existing_associations.add(note_obj.note_id)
                         except Exception as e:
                             logger.error(f"创建笔记与标签关联时出错: {str(e)}")
 

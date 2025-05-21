@@ -80,6 +80,7 @@ class Settings(BaseSettings):
 
     # 系统路径设置
     PYTHONPATH: str = os.getenv("PYTHONPATH", "")
+    NODE_PATH: str = os.getenv("NODE_PATH", "")
 
     class Config:
         env_file = ".env"

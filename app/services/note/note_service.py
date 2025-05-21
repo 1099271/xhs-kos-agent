@@ -8,6 +8,9 @@ from app.schemas.note_schemas import XhsSearchResponse
 from app.infra.dao.note_dao import NoteDAO
 from app.services.spider.spider_service import SpiderService
 
+from app.infra.db.async_database import get_async_db
+from sqlalchemy.ext.asyncio import AsyncSession
+
 
 class NoteService:
     def __init__(self):
@@ -36,9 +39,11 @@ class NoteService:
         根据标签获取小红书笔记（使用Spider_XHS爬虫）
         """
         spider_service = SpiderService()
-        notes = await spider_service.get_notes(tag, num)
+        notes_data = await spider_service.get_notes(tag, num)
 
-        return await NoteDAO.store_spider_note_list(tag, notes)
+        async for session in get_async_db():
+            db: AsyncSession = session
+            return await NoteDAO.store_spider_note_list(db, tag, notes_data)
 
     async def get_notes_by_coze(self, tag: str, num: int) -> List[XhsNote]:
         """

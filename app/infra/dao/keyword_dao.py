@@ -1,7 +1,9 @@
 import uuid
-from typing import Optional
+import json
+from typing import Optional, List
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func
+from sqlalchemy.dialects.mysql import JSON as MySQLJSON
 from app.infra.models.keyword_models import XhsKeywordGroup
 from app.utils.logger import app_logger as logger
 
@@ -9,33 +11,69 @@ from app.utils.logger import app_logger as logger
 class KeywordDAO:
     @staticmethod
     async def get_or_create_keyword_group(
-        db: AsyncSession, keywords: str, group_name: Optional[str] = None
+        db: AsyncSession, keywords: List[str], group_name: Optional[str] = None
     ) -> XhsKeywordGroup:
-        """获取或创建关键词群组"""
+        """获取或创建关键词群组
+
+        Args:
+            db: 数据库会话
+            keywords: 关键词列表
+            group_name: 可选的群组名称
+
+        Returns:
+            XhsKeywordGroup 实例
+        """
 
         try:
-            # 使用 select 语句替代 query
-            stmt = select(XhsKeywordGroup).filter(XhsKeywordGroup.keywords == keywords)
-            result = await db.execute(stmt)
-            keyword_group = result.scalars().first()
+            # 确保keywords是一个排序后的列表，便于比较
+            sorted_keywords = (
+                sorted(keywords) if isinstance(keywords, list) else [str(keywords)]
+            )
 
-            # 如果关键词群组不存在，创建新的关键词群组
-            if not keyword_group:
-                # 生成唯一的群组名称
+            # 查找匹配的关键词群组
+            # MySQL JSON_CONTAINS必须双向检查才能确保完全匹配
+            found_groups = []
+
+            # 获取所有可能的群组
+            stmt = select(XhsKeywordGroup)
+            result = await db.execute(stmt)
+            all_groups = result.scalars().all()
+
+            # 手动比较JSON内容
+            for group in all_groups:
+                group_keywords = group.keywords
+                # 确保数据库中的关键词也是排序列表
+                if not isinstance(group_keywords, list):
+                    try:
+                        if isinstance(group_keywords, str):
+                            group_keywords = json.loads(group_keywords)
+                    except:
+                        continue
+
+                sorted_group_keywords = (
+                    sorted(group_keywords)
+                    if isinstance(group_keywords, list)
+                    else [str(group_keywords)]
+                )
+
+                # 比较两个排序列表是否相等
+                if sorted_group_keywords == sorted_keywords:
+                    found_groups.append(group)
+                    break
+
+            if found_groups:
+                keyword_group = found_groups[0]
+            else:
                 unique_group_name = group_name or f"关键词群组-{uuid.uuid4().hex[:8]}"
 
                 keyword_group = XhsKeywordGroup(
                     group_name=unique_group_name,
-                    keywords=keywords,
+                    keywords=sorted_keywords,
                 )
                 db.add(keyword_group)
                 await db.flush()
                 logger.info(
-                    f"创建新的关键词群组: {unique_group_name}, 关键词: {keywords}"
-                )
-            else:
-                logger.info(
-                    f"找到现有关键词群组: {keyword_group.group_name}, ID: {keyword_group.group_id}"
+                    f"创建新的关键词群组: {unique_group_name}, 关键词: {sorted_keywords}"
                 )
 
             return keyword_group

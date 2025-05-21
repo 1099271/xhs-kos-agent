@@ -3,6 +3,7 @@ import json
 from app.config.settings import settings
 from app.ingest.xhs_spider.apis.pc_apis import XHS_Apis
 from app.utils.logger import app_logger as logger
+from app.utils.file import save_json_response
 
 
 class SpiderService:
@@ -17,9 +18,8 @@ class SpiderService:
         success, msg, notes = self.spider_xhs.search_some_note(
             tag, num, cookies_str, sort, note_type
         )
+        save_json_response(notes, "spider_get_notes")
 
-        # notes 是一个列表，每个元素是一个字典，包含笔记的详细信息
-        # 例如: [{"note_id": "123", "title": "标题", "desc": "描述", ...}, ...]
         if success and notes:
             logger.info(f"成功获取到 {len(notes)} 条笔记")
             return notes
