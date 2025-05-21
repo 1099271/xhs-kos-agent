@@ -43,7 +43,7 @@ def get_xhs_note_by_topic_cli(
 async def get_xhs_note_by_topic_cli_async(tag: str, num: int):
     logger.info(f"正在获取改标签相关的笔记列表")
     note_service = NoteService()
-    res_notes = await note_service.get_notes_by_topic_tag(tag, num)
+    res_notes = await note_service.get_notes_by_topic_tag(tag, num, use_coze=False)
     logger.info(f"Done! 共获取到了 {len(res_notes)} 个笔记")
 
 

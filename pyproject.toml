@@ -13,9 +13,13 @@ dependencies = [
     "langsmith>=0.3.42",
     "loguru>=0.7.3",
     "mcp[cli]>=1.9.0",
+    "openpyxl>=3.1.5",
     "pydantic>=2.11.4",
+    "pyexecjs>=1.5.1",
     "pymysql>=1.1.1",
+    "python-dotenv>=1.1.0",
     "requests>=2.32.3",
+    "retry>=0.9.2",
     "sqlalchemy>=2.0.41",
     "typer>=0.15.4",
 ]

@@ -5,7 +5,7 @@ from app.config.settings import settings
 from app.infra.dao.topic_dao import TopicDAO
 from app.infra.models.topic_models import XhsTopicDiscussion, XhsTopicsResponse
 
-from app.services.coze.coze_services import CozeService
+from app.services.coze.coze_service import CozeService
 
 
 class TopicService:

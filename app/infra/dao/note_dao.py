@@ -11,6 +11,7 @@ from typing import List, Dict, Any
 from datetime import datetime
 import traceback
 from sqlalchemy import select
+import json
 
 from app.utils.logger import app_logger as logger
 
@@ -347,3 +348,347 @@ class NoteDAO:
             raise
 
         return stored_notes
+
+    # todo: 需要注意的是，这里没有存储笔记的xsec_token，需要后续补充
+    async def store_spider_note_list(
+        db: AsyncSession,
+        tag: str,
+        notes: List[Dict[str, Any]],
+    ) -> List[XhsNote]:
+        """存储爬虫获取的笔记列表数据，确保幂等性操作"""
+        stored_notes_result = []
+        await db.rollback()  # 确保会话干净
+
+        try:
+            if not notes:
+                logger.info("没有笔记数据需要处理。")
+                return []
+
+            note_ids = [note.get("id") for note in notes if note.get("id")]
+            author_ids = [
+                note.get("note_card", {}).get("user", {}).get("user_id")
+                for note in notes
+                if note.get("note_card", {}).get("user", {}).get("user_id")
+            ]
+
+            logger.info(
+                f"开始处理 {len(note_ids)} 条来自爬虫的笔记数据，关联标签: {tag}"
+            )
+
+            existing_notes_dict = {}
+            existing_authors_dict = {}
+
+            if note_ids:
+                try:
+                    stmt = select(XhsNote).filter(XhsNote.note_id.in_(note_ids))
+                    result = await db.execute(stmt)
+                    existing_notes = result.scalars().all()
+                    existing_notes_dict = {n.note_id: n for n in existing_notes}
+                    logger.info(f"找到 {len(existing_notes_dict)} 条已存在的笔记")
+                except Exception as e:
+                    logger.error(f"查询笔记信息时出错: {str(e)}")
+
+            if author_ids:
+                try:
+                    stmt = select(XhsAuthor).filter(
+                        XhsAuthor.author_user_id.in_(author_ids)
+                    )
+                    result = await db.execute(stmt)
+                    existing_authors = result.scalars().all()
+                    existing_authors_dict = {
+                        a.author_user_id: a for a in existing_authors
+                    }
+                    logger.info(f"找到 {len(existing_authors_dict)} 个已存在的作者")
+                except Exception as e:
+                    logger.error(f"查询作者信息时出错: {str(e)}")
+
+            keyword_group = None
+            existing_associations = set()
+            if tag:
+                try:
+                    keyword_group = await KeywordDAO.get_or_create_keyword_group(
+                        db, [tag]
+                    )
+                    if keyword_group and keyword_group.group_id > 0 and note_ids:
+                        stmt = select(XhsKeywordGroupNote.note_id).filter(
+                            XhsKeywordGroupNote.group_id == keyword_group.group_id,
+                            XhsKeywordGroupNote.note_id.in_(note_ids),
+                        )
+                        result = await db.execute(stmt)
+                        existing_associations = {
+                            note_id_tuple[0] for note_id_tuple in result.all()
+                        }
+                        logger.info(
+                            f"标签 '{tag}' (群组ID: {keyword_group.group_id}) 已关联笔记数量: {len(existing_associations)}"
+                        )
+                except Exception as e:
+                    logger.error(f"处理标签 '{tag}' 时出错: {str(e)}")
+                    keyword_group = None  # 出错则不进行关联
+
+            for note_item_data in notes:
+                try:
+                    note_id = note_item_data.get("id")
+                    if not note_id:
+                        logger.warning(
+                            f"笔记缺少ID，跳过: {note_item_data.get('note_card', {}).get('display_title', '未知标题')}"
+                        )
+                        continue
+
+                    note_card = note_item_data.get("note_card", {})
+                    user_info = note_card.get("user", {})
+                    author_user_id = user_info.get("user_id")
+
+                    if not author_user_id:
+                        logger.warning(f"笔记 {note_id} 的作者ID为空，跳过处理")
+                        continue
+
+                    # 确保author_user_id是字符串
+                    author_user_id = str(author_user_id)
+
+                    author_data = {
+                        "author_user_id": author_user_id,
+                        "author_nick_name": str(
+                            user_info.get("nickname")
+                            or user_info.get("nick_name")
+                            or ""
+                        ),
+                        "author_avatar": str(user_info.get("avatar", "")),
+                        # 爬虫数据中无直接的 author_home_page_url, xsec_token, 先置空
+                        "author_home_page_url": f"https://www.xiaohongshu.com/user/profile/{author_user_id}",  # 可以尝试拼接
+                        "author_desc": "",
+                        "author_interaction": 0,
+                        "author_ip_location": None,
+                        "author_red_id": None,
+                        "author_tags": None,
+                        "author_fans": 0,
+                        "author_follows": 0,
+                        "author_gender": None,
+                    }
+
+                    author = existing_authors_dict.get(author_user_id)
+                    if author:
+                        for key, value in author_data.items():
+                            if (
+                                hasattr(author, key) and value is not None
+                            ):  # 确保只更新非None值
+                                setattr(author, key, value)
+                        author.updated_at = datetime.now()
+                    else:
+                        author = XhsAuthor(**author_data)
+                        db.add(author)
+                        existing_authors_dict[author_user_id] = author
+                        logger.info(f"创建新作者: {author_user_id}")
+
+                    interact_info = note_card.get("interact_info", {})
+                    cover_info = note_card.get("cover", {})
+
+                    note_liked_count_str = interact_info.get("liked_count", "0")
+                    note_liked_count = (
+                        int(note_liked_count_str)
+                        if note_liked_count_str.isdigit()
+                        else 0
+                    )
+
+                    collected_count_str = interact_info.get("collected_count", "0")
+                    collected_count = (
+                        int(collected_count_str) if collected_count_str.isdigit() else 0
+                    )
+
+                    comment_count_str = interact_info.get("comment_count", "0")
+                    comment_count = (
+                        int(comment_count_str) if comment_count_str.isdigit() else 0
+                    )
+
+                    shared_count_str = interact_info.get("shared_count", "0")
+                    shared_count = (
+                        int(shared_count_str) if shared_count_str.isdigit() else 0
+                    )
+
+                    note_main_data = {
+                        "note_id": str(note_id),
+                        "author_user_id": author_user_id,
+                        "note_url": f"https://www.xiaohongshu.com/explore/{note_id}",  # 爬虫数据中无xsec_token, 尝试拼接
+                        "note_xsec_token": str(
+                            user_info.get("xsec_token", "")
+                        ),  # 尝试从user_info获取
+                        "note_display_title": str(note_card.get("display_title", "")),
+                        "note_cover_url_pre": str(cover_info.get("url_pre", "")),
+                        "note_cover_url_default": str(
+                            cover_info.get("url_default", "")
+                        ),
+                        "note_cover_width": (
+                            int(cover_info.get("width"))
+                            if cover_info.get("width")
+                            else None
+                        ),
+                        "note_cover_height": (
+                            int(cover_info.get("height"))
+                            if cover_info.get("height")
+                            else None
+                        ),
+                        "note_liked_count": note_liked_count,
+                        "note_liked": bool(interact_info.get("liked", False)),
+                        "note_card_type": str(
+                            note_card.get("type", "normal")
+                        ),  # 默认为 normal
+                        "note_model_type": str(
+                            note_item_data.get("model_type", "note")
+                        ),  # 默认为 note
+                        "author_nick_name": author_data["author_nick_name"],
+                        "author_avatar": author_data["author_avatar"],
+                        "author_home_page_url": author_data["author_home_page_url"],
+                    }
+
+                    note_obj = existing_notes_dict.get(note_id)
+                    if note_obj:
+                        for key, value in note_main_data.items():
+                            if hasattr(note_obj, key) and value is not None:
+                                setattr(note_obj, key, value)
+                        note_obj.updated_at = datetime.now()
+                    else:
+                        note_obj = XhsNote(**note_main_data)
+                        db.add(note_obj)
+                        existing_notes_dict[note_id] = note_obj
+                        logger.info(f"创建新笔记: {note_id}")
+
+                    # 处理笔记详情
+                    publish_time_info = note_card.get("corner_tag_info", [])
+                    publish_time_str = None
+                    if (
+                        publish_time_info
+                        and isinstance(publish_time_info, list)
+                        and len(publish_time_info) > 0
+                    ):
+                        # 假设第一个 corner_tag_info 且 type 为 publish_time 是发布时间
+                        for p_info in publish_time_info:
+                            if p_info.get("type") == "publish_time":
+                                publish_time_str = p_info.get("text")
+                                break
+
+                    note_create_time = datetime.now()  # 默认为当前时间
+                    if publish_time_str:
+                        try:
+                            note_create_time = datetime.strptime(
+                                publish_time_str, "%Y-%m-%d"
+                            )
+                        except ValueError:
+                            logger.warning(
+                                f"笔记 {note_id} 的发布时间格式无法解析: {publish_time_str}, 使用当前时间"
+                            )
+                            # 如果无法解析，则保留为当前时间或设置为 None，取决于业务需求
+                            # 这里我们默认使用当前时间，也可以考虑设置为 None 如果数据库允许
+
+                    image_list_db = None
+                    if note_card.get("image_list"):
+                        try:
+                            image_list_db = json.dumps(
+                                [
+                                    {
+                                        "url": (
+                                            img.get("info_list", [{}])[0].get("url")
+                                            if img.get("info_list")
+                                            else None
+                                        ),  # 取第一个info_list的url
+                                        "height": img.get("height"),
+                                        "width": img.get("width"),
+                                    }
+                                    for img in note_card.get("image_list")
+                                ]
+                            )
+                        except Exception as e:
+                            logger.error(
+                                f"序列化 image_list 失败: {note_id}, error: {e}"
+                            )
+
+                    note_detail_data = {
+                        "note_id": note_obj.note_id,
+                        "note_url": note_obj.note_url,
+                        "author_user_id": note_obj.author_user_id,
+                        "note_last_update_time": datetime.now(),  # 详情的更新时间
+                        "note_create_time": note_create_time,  # 笔记的发布时间
+                        "note_model_type": note_obj.note_model_type,
+                        "note_card_type": note_obj.note_card_type,
+                        "note_display_title": note_obj.note_display_title,
+                        "note_desc": None,  # 爬虫数据中无直接的 note_desc，可以后续通过 get_note_info 补充
+                        "comment_count": comment_count,
+                        "note_liked_count": note_obj.note_liked_count,
+                        "share_count": shared_count,
+                        "collected_count": collected_count,
+                        "video_id": None,  # 爬虫的 search_some_note 结果不直接包含视频信息
+                        "video_h266_url": None,
+                        "video_a1_url": None,
+                        "video_h264_url": None,
+                        "video_h265_url": None,
+                        "note_duration": None,
+                        "note_image_list": image_list_db,  # 存储 image_list
+                        "note_tags": None,  # 爬虫的 search_some_note 结果不直接包含笔记标签
+                        "note_liked": note_obj.note_liked,
+                        "collected": bool(interact_info.get("collected", False)),
+                    }
+
+                    stmt_detail = select(XhsNoteDetail).filter(
+                        XhsNoteDetail.note_id == note_obj.note_id
+                    )
+                    result_detail = await db.execute(stmt_detail)
+                    note_detail_obj = result_detail.scalars().first()
+
+                    if note_detail_obj:
+                        for key, value in note_detail_data.items():
+                            if hasattr(note_detail_obj, key) and value is not None:
+                                setattr(note_detail_obj, key, value)
+                        note_detail_obj.updated_at = datetime.now()
+                    else:
+                        note_detail_obj = XhsNoteDetail(**note_detail_data)
+                        db.add(note_detail_obj)
+                        logger.info(f"创建新笔记详情: {note_detail_obj.note_id}")
+
+                    stored_notes_result.append(note_obj)
+
+                    if (
+                        tag
+                        and keyword_group
+                        and keyword_group.group_id > 0
+                        and note_obj.note_id not in existing_associations
+                    ):
+                        try:
+                            association = XhsKeywordGroupNote(
+                                note_id=note_obj.note_id,
+                                group_id=keyword_group.group_id,
+                                retrieved_at=datetime.now(),
+                            )
+                            db.add(association)
+                            existing_associations.add(
+                                note_obj.note_id
+                            )  # 添加到已关联集合
+                            logger.info(
+                                f"创建笔记与标签 '{tag}' 的关联: {note_obj.note_id} -> group_id {keyword_group.group_id}"
+                            )
+                        except Exception as e:
+                            logger.error(f"创建笔记与标签关联时出错: {str(e)}")
+
+                except Exception as e:
+                    logger.error(
+                        f"处理来自爬虫的笔记时出错 {note_item_data.get('id', '未知ID')}: {str(e)}\\n{traceback.format_exc()}"
+                    )
+                    continue
+
+            try:
+                await db.flush()
+                await db.commit()
+                logger.info(
+                    f"成功处理并存储 {len(stored_notes_result)} 条来自爬虫的笔记数据"
+                )
+            except Exception as e:
+                await db.rollback()
+                logger.error(f"提交事务时出错: {str(e)}\\n{traceback.format_exc()}")
+                logger.warning("由于事务提交错误，可能有部分爬虫笔记数据未能成功存储")
+
+        except Exception as e:
+            await db.rollback()
+            logger.error(
+                f"存储爬虫笔记过程中发生严重错误: {str(e)}\\n{traceback.format_exc()}"
+            )
+            # 根据实际情况决定是否向上抛出异常
+            # raise
+
+        return stored_notes_result
