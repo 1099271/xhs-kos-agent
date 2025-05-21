@@ -32,8 +32,9 @@ class CozeService:
     def __init__(self):
         pass
 
+    @classmethod
     def call_coze_api(
-        self,
+        cls,
         workflow_id: str,
         parameters: Dict[str, Any],
         log_file_prefix: str,
@@ -51,9 +52,9 @@ class CozeService:
         Returns:
             API响应结果
         """
-        if retries >= self.max_retries:
+        if retries >= cls.max_retries:
             logger.error(
-                f"调用Coze API达到最大重试次数 {self.max_retries} 后失败 (workflow_id: {workflow_id})."
+                f"调用Coze API达到最大重试次数 {cls.max_retries} 后失败 (workflow_id: {workflow_id})."
             )
             return {
                 "error": "Max retries reached",
@@ -91,7 +92,7 @@ class CozeService:
                         f"Coze API请求频率超出限制 (workflow_id: {workflow_id}), 将在60秒后重试 (当前重试次数: {retries + 1})"
                     )
                     time.sleep(60)
-                    return self.call_coze_api(
+                    return cls.call_coze_api(
                         workflow_id, parameters, log_file_prefix, retries + 1
                     )
                 case 720702222:
@@ -100,7 +101,7 @@ class CozeService:
                         f"Coze API服务器问题 (workflow_id: {workflow_id}), 将在120秒后重试 (当前重试次数: {retries + 1})"
                     )
                     time.sleep(120)
-                    return self.call_coze_api(
+                    return cls.call_coze_api(
                         workflow_id, parameters, log_file_prefix, retries + 1
                     )
                 case _:

@@ -52,10 +52,17 @@ async def get_xhs_note_by_topic_cli_async(tag: str, num: int):
 # 3. 补全没有笔记详情的笔记内容
 @app.command()
 def finish_note_detail_cli(
-    use_coze: bool = typer.Option(
-        False, "--use-coze", "-c", help="是否使用Coze获取笔记详情，默认使用爬虫"
+    use_crawler: bool = typer.Option(
+        False,
+        "--use-crawler",
+        "-c",
+        help="使用爬虫替代Coze获取笔记详情（默认使用Coze）",
     )
 ):
+    if use_crawler:
+        use_coze = False
+    else:
+        use_coze = True
     """
     补全没有详情内容的笔记
     """

@@ -1,12 +1,11 @@
-from random import random
+import random
 import time
 import traceback
-from typing import List, Optional
-from sqlalchemy import select, text
+from typing import List
+from sqlalchemy import text
 from loguru import logger
-import datetime
 
-from app.infra.models.note_models import XhsNote, XhsNoteDetail
+from app.infra.models.note_models import XhsNote
 
 from app.services.coze.coze_service import CozeService
 from app.config.settings import settings
@@ -16,6 +15,11 @@ from app.services.spider.spider_service import SpiderService
 
 from app.infra.db.async_database import get_async_db
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.services.note.note_detail_service import (
+    get_note_detail_by_coze,
+    get_note_detail_by_spider,
+)
 
 
 async def get_notes_by_topic_tag(
@@ -129,9 +133,9 @@ async def finish_note_detail(use_coze: bool = False):
                         note_url = f"https://www.xiaohongshu.com/explore/{note_id}?xsec_token={note_xsec_token}&xsec_source=pc_note"
                     logger.info(f"处理第 {index} 条笔记: {note_url}")
                     if use_coze:
-                        pass
+                        note_detail = await get_note_detail_by_coze(note_url)
                     else:
-                        pass
+                        note_detail = await get_note_detail_by_spider(note_url)
 
                     if note_detail:
                         processed_count += 1

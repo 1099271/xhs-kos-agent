@@ -3,6 +3,9 @@ from app.utils.logger import app_logger as logger
 from app.services.coze.coze_service import CozeService
 from app.schemas.note_schemas import XhsNoteDetailResponse
 from app.infra.dao.note_dao import NoteDAO
+from app.services.spider.spider_service import SpiderService
+from app.infra.db.async_database import get_async_db
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 async def get_note_detail_by_coze(note_url: str) -> dict:
@@ -32,5 +35,17 @@ async def get_note_detail_by_coze(note_url: str) -> dict:
     )
 
 
-async def get_note_detail_by_spider(note_id: str) -> dict:
-    pass
+async def get_note_detail_by_spider(note_url: str) -> dict:
+    """
+    根据标签获取小红书笔记详情（使用Spider_XHS爬虫）
+    """
+    spider_service = SpiderService()
+    note_detail = await spider_service.get_note_detail(note_url)
+
+    async for session in get_async_db():
+        db: AsyncSession = session
+        try:
+            result = await NoteDAO.store_spider_note_detail(db, note_detail)
+            return result
+        finally:
+            await db.close()  # 确保在任何情况下都关闭数据库连接

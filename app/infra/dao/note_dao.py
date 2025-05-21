@@ -590,25 +590,18 @@ class NoteDAO:
 
                     image_list_db = None
                     if note_card.get("image_list"):
-                        try:
-                            image_list_db = json.dumps(
-                                [
-                                    {
-                                        "url": (
-                                            img.get("info_list", [{}])[0].get("url")
-                                            if img.get("info_list")
-                                            else None
-                                        ),  # 取第一个info_list的url
-                                        "height": img.get("height"),
-                                        "width": img.get("width"),
-                                    }
-                                    for img in note_card.get("image_list")
-                                ]
-                            )
-                        except Exception as e:
-                            logger.error(
-                                f"序列化 image_list 失败: {note_id}, logger.error: {e}"
-                            )
+                        image_list_db = [
+                            {
+                                "url": (
+                                    img.get("info_list", [{}])[0].get("url")
+                                    if img.get("info_list")
+                                    else None
+                                ),  # 取第一个info_list的url
+                                "height": img.get("height"),
+                                "width": img.get("width"),
+                            }
+                            for img in note_card.get("image_list")
+                        ]
 
                     # 视频相关信息处理
                     video_id = None
@@ -947,6 +940,262 @@ class NoteDAO:
             error_detail = f"{str(e)}\n{''.join(traceback.format_tb(e.__traceback__))}"
             logger.error(f"存储笔记详情过程中发生错误: {error_detail}")
             raise
+
+    @classmethod
+    async def store_spider_note_detail(
+        cls,
+        db: AsyncSession,
+        note_detail: Dict[str, Any],
+    ) -> XhsNote:
+        """
+        存储爬虫获取的笔记详情数据
+
+        Args:
+            db: 数据库会话
+            note_detail: 笔记详情数据
+
+        Returns:
+            XhsNote: 存储的笔记对象
+        """
+        try:
+            if (
+                not note_detail
+                or not note_detail.get("success")
+                or not note_detail.get("data", {}).get("items")
+            ):
+                logger.warning("笔记详情数据无效或结构错误")
+                return None
+
+            # 获取第一个笔记项目
+            note_item = note_detail["data"]["items"][0]
+            note_id = note_item.get("id")
+            note_card = note_item.get("note_card", {})
+
+            if not note_id or not note_card:
+                logger.warning(f"笔记详情数据缺少必要字段: note_id={note_id}")
+                return None
+
+            # 解析用户信息
+            user_info = note_card.get("user", {})
+            author_user_id = user_info.get("user_id")
+
+            if not author_user_id:
+                logger.warning(f"笔记 {note_id} 的作者ID为空，无法处理")
+                return None
+
+            # 确保数据库会话是干净的
+            await db.rollback()
+
+            # 从用户信息中获取xsec_token作为备用
+            user_xsec_token = str(user_info.get("xsec_token", ""))
+
+            # 处理作者信息
+            author_data = {
+                "author_user_id": str(author_user_id),
+                "author_nick_name": str(user_info.get("nickname", "")),
+                "author_avatar": str(user_info.get("avatar", "")),
+                "author_home_page_url": f"https://www.xiaohongshu.com/user/profile/{author_user_id}?xsec_token={user_xsec_token}&xsec_source=pc_note",  # 参考store_spider_note_list的拼接方式
+                "author_desc": "",  # 默认空
+                "author_interaction": 0,  # 默认值
+                "author_ip_location": None,
+                "author_red_id": None,
+                "author_tags": None,
+                "author_fans": 0,
+                "author_follows": 0,
+                "author_gender": None,
+            }
+
+            # 获取或更新作者
+            author = await AuthorDAO.store_author(db, author_data)
+
+            # 获取交互信息
+            interact_info = note_card.get("interact_info", {})
+            note_liked_count = (
+                int(interact_info.get("liked_count", "0"))
+                if interact_info.get("liked_count", "").isdigit()
+                else 0
+            )
+            collected_count = (
+                int(interact_info.get("collected_count", "0"))
+                if interact_info.get("collected_count", "").isdigit()
+                else 0
+            )
+            comment_count = (
+                int(interact_info.get("comment_count", "0"))
+                if interact_info.get("comment_count", "").isdigit()
+                else 0
+            )
+            share_count = (
+                int(interact_info.get("share_count", "0"))
+                if interact_info.get("share_count", "").isdigit()
+                else 0
+            )
+
+            # 获取图片信息
+            cover_info = None
+            image_list = note_card.get("image_list", [])
+            if image_list and len(image_list) > 0:
+                cover_info = image_list[0]  # 第一张图作为封面
+
+            # 处理发布时间和更新时间
+            time_ms = note_card.get("time")
+            last_update_time_ms = note_card.get("last_update_time")
+            note_create_time = (
+                datetime.fromtimestamp(time_ms / 1000) if time_ms else None
+            )
+            note_last_update_time = (
+                datetime.fromtimestamp(last_update_time_ms / 1000)
+                if last_update_time_ms
+                else None
+            )
+
+            # 准备笔记基本数据
+            xsec_token = str(note_item.get("xsec_token", ""))
+            note_url = f"https://www.xiaohongshu.com/explore/{note_id}?xsec_token={xsec_token}&xsec_source=pc_note"
+
+            note_basic_data = {
+                "note_id": str(note_id),
+                "author_user_id": str(author_user_id),
+                "note_url": note_url,
+                "note_xsec_token": xsec_token,
+                "note_display_title": str(note_card.get("title", "")),
+                "note_cover_url_pre": (
+                    str(cover_info.get("url_pre", "")) if cover_info else ""
+                ),
+                "note_cover_url_default": (
+                    str(cover_info.get("url_default", "")) if cover_info else ""
+                ),
+                "note_cover_width": (
+                    int(cover_info.get("width"))
+                    if cover_info and cover_info.get("width")
+                    else None
+                ),
+                "note_cover_height": (
+                    int(cover_info.get("height"))
+                    if cover_info and cover_info.get("height")
+                    else None
+                ),
+                "note_liked_count": note_liked_count,
+                "note_liked": bool(interact_info.get("liked", False)),
+                "note_card_type": str(note_card.get("type", "normal")),
+                "note_model_type": str(note_item.get("model_type", "note")),
+                "author_nick_name": author_data["author_nick_name"],
+                "author_avatar": author_data["author_avatar"],
+                "author_home_page_url": author_data["author_home_page_url"],
+            }
+
+            # 存储基本笔记数据
+            note = await cls.store_xhs_note_basic(db, note_basic_data)
+
+            # 处理笔记图片列表
+            image_list_data = None
+            if image_list:
+                image_list_data = [
+                    {
+                        "url": (
+                            img.get("info_list", [{}])[0].get("url")
+                            if img.get("info_list")
+                            else None
+                        ),
+                        "height": img.get("height"),
+                        "width": img.get("width"),
+                    }
+                    for img in image_list
+                ]
+
+            # 处理视频信息
+            video_id = None
+            video_h266_url = None
+            video_a1_url = None
+            video_h264_url = None
+            video_h265_url = None
+            note_duration = None
+
+            # 如果是视频类型笔记，尝试获取视频信息
+            is_video = note_card.get("type") == "video"
+            if is_video and cover_info and cover_info.get("stream"):
+                stream_info = cover_info.get("stream", {})
+
+                # 提取h264视频链接
+                h264_videos = stream_info.get("h264", [])
+                if h264_videos and len(h264_videos) > 0:
+                    video_h264_url = h264_videos[0].get("master_url")
+
+                # 提取h265视频链接
+                h265_videos = stream_info.get("h265", [])
+                if h265_videos and len(h265_videos) > 0:
+                    video_h265_url = h265_videos[0].get("master_url")
+
+                # 提取h266视频链接
+                h266_videos = stream_info.get("h266", [])
+                if h266_videos and len(h266_videos) > 0:
+                    video_h266_url = h266_videos[0].get("master_url")
+
+                # 提取av1视频链接
+                av1_videos = stream_info.get("av1", [])
+                if av1_videos and len(av1_videos) > 0:
+                    video_a1_url = av1_videos[0].get("master_url")
+
+                # 尝试从其他信息中获取视频ID
+                if video_h264_url:
+                    video_id_match = (
+                        video_h264_url.split("/")[-1].split("_")[0]
+                        if video_h264_url
+                        else None
+                    )
+                    video_id = video_id_match if video_id_match else None
+
+            # 处理标签信息
+            tag_list = note_card.get("tag_list", [])
+            if tag_list:
+                tag_names = [tag.get("name") for tag in tag_list if tag.get("name")]
+
+            # 准备笔记详情数据
+            note_detail_data = {
+                "note_id": note.note_id,
+                "note_url": note.note_url,
+                "author_user_id": note.author_user_id,
+                "note_last_update_time": note_last_update_time,
+                "note_create_time": note_create_time,
+                "note_model_type": note.note_model_type,
+                "note_card_type": note.note_card_type,
+                "note_display_title": note.note_display_title,
+                "note_desc": str(note_card.get("desc", "")),
+                "comment_count": comment_count,
+                "note_liked_count": note_liked_count,
+                "share_count": share_count,
+                "collected_count": collected_count,
+                "video_id": video_id,
+                "video_h266_url": video_h266_url,
+                "video_a1_url": video_a1_url,
+                "video_h264_url": video_h264_url,
+                "video_h265_url": video_h265_url,
+                "note_duration": note_duration,
+                "note_image_list": image_list_data,
+                "note_tags": tag_names,
+                "note_liked": bool(interact_info.get("liked", False)),
+                "collected": bool(interact_info.get("collected", False)),
+            }
+
+            # 存储笔记详情数据
+            await cls.store_xhs_note_detail(db, note_detail_data)
+
+            # 提交事务
+            try:
+                await db.flush()
+                await db.commit()
+                logger.info(f"成功存储来自爬虫的笔记详情: {note_id}")
+                return note
+            except Exception as e:
+                await db.rollback()
+                logger.error(f"提交事务时出错: {str(e)}\n{traceback.format_exc()}")
+                logger.warning("由于事务提交错误，可能有部分数据未能成功存储")
+                return None
+
+        except Exception as e:
+            await db.rollback()
+            logger.error(f"存储爬虫笔记详情时出错: {str(e)}\n{traceback.format_exc()}")
+            return None
 
     @classmethod
     async def store_xhs_note_basic(
