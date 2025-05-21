@@ -7,7 +7,10 @@ app = typer.Typer()
 
 from app.utils.logger import app_logger as logger
 from app.services.topic.topic_service import TopicService
-from app.services.note.note_service import NoteService
+from app.services.note.note_list_service import (
+    get_notes_by_topic_tag,
+    finish_note_detail,
+)
 
 
 # 1. 通过特定标签获取标签浏览量
@@ -42,18 +45,24 @@ def get_xhs_note_by_topic_cli(
 
 async def get_xhs_note_by_topic_cli_async(tag: str, num: int):
     logger.info(f"正在获取标签相关的笔记列表")
-    note_service = NoteService()
-    res_notes = await note_service.get_notes_by_topic_tag(tag, num, use_coze=False)
+    res_notes = await get_notes_by_topic_tag(tag, num, use_coze=False)
     logger.info(f"Done! 共获取到了 {len(res_notes)} 个笔记")
 
 
 # 3. 补全没有笔记详情的笔记内容
 @app.command()
-def finish_note_detail_cli():
-    asyncio.run(finish_note_detail_cli_async())
+def finish_note_detail_cli(
+    use_coze: bool = typer.Option(
+        False, "--use-coze", "-c", help="是否使用Coze获取笔记详情，默认使用爬虫"
+    )
+):
+    """
+    补全没有详情内容的笔记
+    """
+    asyncio.run(finish_note_detail_cli_async(use_coze))
 
 
-async def finish_note_detail_cli_async():
-    logger.info(f"正在获取笔记详情")
-    note_service = NoteService()
-    await note_service.finish_note_detail()
+async def finish_note_detail_cli_async(use_coze: bool = False):
+    logger.info(f"正在获取笔记详情，使用{'Coze API' if use_coze else '爬虫'}")
+    processed_count = await finish_note_detail(use_coze=use_coze)
+    logger.info(f"完成笔记详情补全，共处理 {processed_count} 条笔记")

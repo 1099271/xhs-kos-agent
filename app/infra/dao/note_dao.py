@@ -6,6 +6,7 @@ from app.infra.models.note_models import (
 from app.infra.models.author_models import XhsAuthor
 from app.infra.models.keyword_models import XhsKeywordGroupNote
 from app.infra.dao.keyword_dao import KeywordDAO
+from app.infra.dao.author_dao import AuthorDAO
 from app.schemas.note_schemas import XhsSearchResponse
 from typing import List, Dict, Any
 from datetime import datetime
@@ -14,6 +15,7 @@ from sqlalchemy import select
 import json
 
 from app.utils.logger import app_logger as logger
+from app.schemas.note_schemas import XhsNoteDetailResponse
 
 
 class NoteDAO:
@@ -431,7 +433,7 @@ class NoteDAO:
                     note_id = note_item_data.get("id")
                     note_xsec_token = str(note_item_data.get("xsec_token", ""))
                     if not note_id or not note_xsec_token:
-                        logger.warning(
+                        logger.logger.warning(
                             f"笔记缺少ID或xsec_token，跳过: {note_item_data.get('note_card', {}).get('display_title', '未知标题')}"
                         )
                         continue
@@ -441,7 +443,7 @@ class NoteDAO:
                     author_user_id = user_info.get("user_id")
 
                     if not author_user_id:
-                        logger.warning(f"笔记 {note_id} 的作者ID为空，跳过处理")
+                        logger.logger.warning(f"笔记 {note_id} 的作者ID为空，跳过处理")
                         continue
 
                     # 确保author_user_id是字符串
@@ -582,7 +584,7 @@ class NoteDAO:
                                     f"{current_year}-{publish_time_str}", "%Y-%m-%d"
                                 )
                         except (ValueError, TypeError) as e:
-                            logger.warning(
+                            logger.logger.warning(
                                 f"笔记 {note_id} 的发布时间解析失败: {publish_time_str}, 错误: {str(e)}"
                             )
 
@@ -605,7 +607,7 @@ class NoteDAO:
                             )
                         except Exception as e:
                             logger.error(
-                                f"序列化 image_list 失败: {note_id}, error: {e}"
+                                f"序列化 image_list 失败: {note_id}, logger.error: {e}"
                             )
 
                     # 视频相关信息处理
@@ -697,7 +699,9 @@ class NoteDAO:
             except Exception as e:
                 await db.rollback()
                 logger.error(f"提交事务时出错: {str(e)}\\n{traceback.format_exc()}")
-                logger.warning("由于事务提交错误，可能有部分爬虫笔记数据未能成功存储")
+                logger.logger.warning(
+                    "由于事务提交错误，可能有部分爬虫笔记数据未能成功存储"
+                )
 
         except Exception as e:
             await db.rollback()
@@ -708,3 +712,292 @@ class NoteDAO:
             # raise
 
         return stored_notes_result
+
+    @classmethod
+    async def store_coze_note_detail(
+        cls,
+        db: AsyncSession,
+        req_info: Dict[str, Any],
+        note_detail_response: "XhsNoteDetailResponse",
+    ) -> XhsNote:
+        try:
+            # 获取笔记详情数据
+            note_data = note_detail_response.data.note
+
+            if not note_data or not note_data.note_id:
+                logger.warning("请求体中缺少有效的笔记详情数据")
+                return None
+            # 处理作者信息
+            author_data = {
+                "author_user_id": (
+                    str(note_data.author_user_id) if note_data.author_user_id else ""
+                ),
+                "author_nick_name": (
+                    str(note_data.author_nick_name)
+                    if note_data.author_nick_name
+                    else ""
+                ),
+                "author_avatar": (
+                    str(note_data.author_avatar) if note_data.author_avatar else ""
+                ),
+                "author_home_page_url": (
+                    str(note_data.author_home_page_url)
+                    if note_data.author_home_page_url
+                    else ""
+                ),
+                "author_desc": "",  # 添加默认值
+                "author_interaction": 0,  # 根据数据库结构设置默认值为0
+                "author_ip_location": None,
+                "author_red_id": None,
+                "author_tags": None,
+                "author_fans": 0,
+                "author_follows": 0,
+                "author_gender": None,
+            }
+
+            await AuthorDAO.store_author(db, author_data)
+
+            # 准备笔记基本数据
+            note_basic_data = {
+                "note_id": str(note_data.note_id),
+                "author_user_id": str(note_data.author_user_id),
+                "note_url": str(note_data.note_url) if note_data.note_url else "",
+                "note_xsec_token": str(note_data.note_xsec_token),
+                "note_display_title": (
+                    str(note_data.note_display_title)
+                    if note_data.note_display_title
+                    else ""
+                ),
+                "note_cover_url_pre": (
+                    str(note_data.note_cover_url_pre)
+                    if hasattr(note_data, "note_cover_url_pre")
+                    else ""
+                ),
+                "note_cover_url_default": (
+                    str(note_data.note_cover_url_default)
+                    if hasattr(note_data, "note_cover_url_default")
+                    else ""
+                ),
+                "note_cover_width": (
+                    int(note_data.note_cover_width)
+                    if hasattr(note_data, "note_cover_width")
+                    and str(note_data.note_cover_width).isdigit()
+                    else None
+                ),
+                "note_cover_height": (
+                    int(note_data.note_cover_height)
+                    if hasattr(note_data, "note_cover_height")
+                    and str(note_data.note_cover_height).isdigit()
+                    else None
+                ),
+                "note_liked_count": (
+                    int(note_data.note_liked_count)
+                    if note_data.note_liked_count
+                    and str(note_data.note_liked_count).isdigit()
+                    else 0
+                ),
+                "note_liked": (
+                    bool(note_data.note_liked)
+                    if note_data.note_liked is not None
+                    else False
+                ),
+                "note_card_type": (
+                    str(note_data.note_card_type) if note_data.note_card_type else ""
+                ),
+                "note_model_type": (
+                    str(note_data.note_model_type) if note_data.note_model_type else ""
+                ),
+                "author_nick_name": (
+                    str(note_data.author_nick_name)
+                    if note_data.author_nick_name
+                    else ""
+                ),
+                "author_avatar": (
+                    str(note_data.author_avatar) if note_data.author_avatar else ""
+                ),
+                "author_home_page_url": (
+                    str(note_data.author_home_page_url)
+                    if note_data.author_home_page_url
+                    else ""
+                ),
+            }
+
+            note = await cls.store_xhs_note_basic(db, note_basic_data)
+
+            # 转换日期时间字符串为datetime对象
+            note_create_time = None
+            note_last_update_time = None
+
+            if note_data.note_create_time:
+                try:
+                    note_create_time = datetime.strptime(
+                        note_data.note_create_time, "%Y-%m-%d %H:%M:%S"
+                    )
+                except Exception as e:
+                    logger.warning(f"解析笔记创建时间出错: {str(e)}")
+
+            if note_data.note_last_update_time:
+                try:
+                    note_last_update_time = datetime.strptime(
+                        note_data.note_last_update_time, "%Y-%m-%d %H:%M:%S"
+                    )
+                except Exception as e:
+                    logger.warning(f"解析笔记更新时间出错: {str(e)}")
+
+            # 准备笔记详情数据
+            note_detail_data = {
+                "note_id": note.note_id,
+                "note_url": note.note_url,
+                "author_user_id": note.author_user_id,
+                "note_last_update_time": note_last_update_time,
+                "note_create_time": note_create_time,
+                "note_model_type": (
+                    str(note_data.note_model_type) if note_data.note_model_type else ""
+                ),
+                "note_card_type": (
+                    str(note_data.note_card_type) if note_data.note_card_type else ""
+                ),
+                "note_display_title": (
+                    str(note_data.note_display_title)
+                    if note_data.note_display_title
+                    else ""
+                ),
+                "note_desc": str(note_data.note_desc) if note_data.note_desc else "",
+                "comment_count": (
+                    int(note_data.comment_count)
+                    if note_data.comment_count
+                    and str(note_data.comment_count).isdigit()
+                    else 0
+                ),
+                "note_liked_count": (
+                    int(note_data.note_liked_count)
+                    if note_data.note_liked_count
+                    and str(note_data.note_liked_count).isdigit()
+                    else 0
+                ),
+                "share_count": (
+                    int(note_data.share_count)
+                    if note_data.share_count and str(note_data.share_count).isdigit()
+                    else 0
+                ),
+                "collected_count": (
+                    int(note_data.collected_count)
+                    if note_data.collected_count
+                    and str(note_data.collected_count).isdigit()
+                    else 0
+                ),
+                "video_id": str(note_data.video_id) if note_data.video_id else None,
+                "video_h266_url": (
+                    str(note_data.video_h266_url) if note_data.video_h266_url else None
+                ),
+                "video_a1_url": (
+                    str(note_data.video_a1_url) if note_data.video_a1_url else None
+                ),
+                "video_h264_url": (
+                    str(note_data.video_h264_url) if note_data.video_h264_url else None
+                ),
+                "video_h265_url": (
+                    str(note_data.video_h265_url) if note_data.video_h265_url else None
+                ),
+                "note_duration": (
+                    int(note_data.note_duration)
+                    if note_data.note_duration
+                    and str(note_data.note_duration).isdigit()
+                    else None
+                ),
+                "note_image_list": (
+                    note_data.note_image_list
+                    if note_data.note_image_list and len(note_data.note_image_list) > 0
+                    else None
+                ),
+                "note_tags": (
+                    note_data.note_tags
+                    if note_data.note_tags and len(note_data.note_tags) > 0
+                    else None
+                ),
+                "note_liked": (
+                    bool(note_data.note_liked)
+                    if note_data.note_liked is not None
+                    else False
+                ),
+                "collected": (
+                    bool(note_data.collected)
+                    if note_data.collected is not None
+                    else False
+                ),
+            }
+
+            await cls.store_xhs_note_detail(db, note_detail_data)
+
+            # 提交事务
+            try:
+                await db.flush()
+                await db.commit()
+                logger.info(f"成功处理并存储笔记详情数据，笔记ID: {note.note_id}")
+                return note
+            except Exception as e:
+                await db.rollback()
+                error_detail = f"提交事务时出错: {str(e)}\n{''.join(traceback.format_tb(e.__traceback__))}"
+                logger.error(error_detail)
+                logger.warning("由于事务提交错误，可能有部分数据未能成功存储")
+                return None
+
+        except Exception as e:
+            await db.rollback()
+            error_detail = f"{str(e)}\n{''.join(traceback.format_tb(e.__traceback__))}"
+            logger.error(f"存储笔记详情过程中发生错误: {error_detail}")
+            raise
+
+    @classmethod
+    async def store_xhs_note_basic(
+        cls,
+        db: AsyncSession,
+        note_basic_data: Dict[str, Any],
+    ) -> XhsNote:
+        # 查询笔记是否存在
+        existing_note = await db.execute(
+            select(XhsNote).filter(XhsNote.note_id == note_basic_data["note_id"])
+        )
+        note = existing_note.scalars().first()
+
+        if note:
+            # 更新现有笔记信息
+            for key, value in note_basic_data.items():
+                setattr(note, key, value)
+            note.updated_at = datetime.now()
+            logger.info(f"更新笔记信息: {note.note_id}")
+        else:
+            # 创建新笔记
+            note = XhsNote(**note_basic_data)
+            await db.add(note)
+            logger.info(f"创建新笔记: {note_basic_data['note_id']}")
+
+        return note
+
+    @classmethod
+    async def store_xhs_note_detail(
+        cls,
+        db: AsyncSession,
+        note_detail_data: Dict[str, Any],
+    ) -> XhsNoteDetail:
+        # 查询笔记是否存在
+        existing_note_detail = await db.execute(
+            select(XhsNoteDetail).filter(
+                XhsNoteDetail.note_id == note_detail_data["note_id"]
+            )
+        )
+        note_detail = existing_note_detail.scalars().first()
+
+        if note_detail:
+            # 更新现有笔记信息
+            for key, value in note_detail_data.items():
+                setattr(note_detail, key, value)
+            note_detail.updated_at = datetime.now()
+            logger.info(f"更新笔记信息: {note_detail.note_id}")
+        else:
+            # 创建新笔记
+            note_detail = XhsNoteDetail(**note_detail_data)
+            db.add(note_detail)
+            logger.info(f"创建新笔记: {note_detail_data['note_id']}")
+
+        return note_detail
