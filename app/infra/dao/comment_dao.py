@@ -154,10 +154,7 @@ class CommentDAO:
         # 转换评论标签
         comment_show_tags = None
         if comment_item.comment_show_tags:
-            try:
-                comment_show_tags = json.dumps(comment_item.comment_show_tags)
-            except Exception as e:
-                logger.warning(f"转换评论标签出错: {str(e)}")
+            comment_show_tags = comment_item.comment_show_tags
 
         if not comment:
             # 创建新评论
@@ -265,6 +262,7 @@ class CommentDAO:
         comment_count = (
             len(note_all_comment) if isinstance(note_all_comment, list) else 0
         )
+        logger.info(f"评论数量: {comment_count}")
         if comment_count > 50:
             logger.info(f"评论数量过多 ({comment_count}条)，从文件读取数据")
             try:
@@ -272,6 +270,44 @@ class CommentDAO:
                     note_all_comment = json.load(f)
             except Exception as e:
                 logger.error(f"从文件读取评论数据失败: {str(e)}")
+        await CommentDAO.store_comments_from_spider(db, note_all_comment)
+
+    @staticmethod
+    async def _save_comment_instance(
+        db: AsyncSession,
+        comment_id: str,
+        data_for_orm: Dict[str, Any],
+        existing_comment_obj: Optional[XhsComment],
+    ) -> tuple[Optional[XhsComment], bool, bool]:  # (instance, is_new, is_updated)
+        """
+        保存（创建或更新）单个评论实例到数据库。
+        此方法不执行 db.flush()，由调用方在适当时机统一执行。
+        """
+        if existing_comment_obj:
+            is_updated_flag = False
+            for key, value in data_for_orm.items():
+                if (
+                    hasattr(existing_comment_obj, key)
+                    and getattr(existing_comment_obj, key) != value
+                ):
+                    setattr(existing_comment_obj, key, value)
+                    is_updated_flag = True
+
+            if is_updated_flag:
+                existing_comment_obj.updated_at = datetime.now()
+            return existing_comment_obj, False, is_updated_flag
+        else:
+            # 创建新评论前检查必要字段
+            if not data_for_orm.get("note_id"):
+                logger.warning(f"评论 {comment_id} 缺少 note_id，无法创建。")
+                return None, False, False
+            if not data_for_orm.get("comment_user_id"):
+                logger.warning(f"评论 {comment_id} 缺少 comment_user_id，无法创建。")
+                return None, False, False
+
+            new_comment = XhsComment(comment_id=comment_id, **data_for_orm)
+            db.add(new_comment)
+            return new_comment, True, False
 
     async def store_comments_from_spider(
         db: AsyncSession, note_all_comment: List[Dict[str, Any]]
@@ -285,6 +321,7 @@ class CommentDAO:
         stored_count = 0
         updated_count = 0
         processed_comment_ids = set()  # 用于防止重复处理同一评论（如果数据源有重叠）
+        pending_at_user_operations = []  # 收集所有需要处理的@用户关系
 
         try:
             # 1. 收集所有评论ID以批量查询
@@ -324,38 +361,79 @@ class CommentDAO:
                 logger.error(f"批量查询评论时出错: {e}", exc_info=True)
                 # 即使查询失败，也尝试继续处理，但可能导致重复插入或更新失败
 
-            # 3. 处理并存储评论 (转换为异步方法)
-            async def _process_and_store_comment_async(
-                comment_data: Dict[str, Any], parent_id: Optional[str] = None
-            ):
-                nonlocal stored_count, updated_count
+            # 3. 收集并处理所有评论，但不立即flush
+            pending_comments = []  # 存储所有要处理的评论数据
+
+            # 预处理所有评论，并按层级组织
+            def collect_comments_recursively(comments_list, parent_id=None, level=0):
+                result = []
+                for comment_data in comments_list:
+                    if not isinstance(comment_data, dict):
+                        continue
+
+                    comment_id = comment_data.get("id")
+                    if not comment_id:
+                        continue
+
+                    # 确定实际的父评论ID
+                    effective_parent_id = parent_id
+                    target_comment = comment_data.get("target_comment")
+                    if target_comment and isinstance(target_comment, dict):
+                        target_id = target_comment.get("id")
+                        if target_id:
+                            effective_parent_id = str(target_id)
+
+                    # 添加到处理列表
+                    result.append(
+                        {
+                            "data": comment_data,
+                            "parent_id": effective_parent_id,
+                            "level": level,
+                        }
+                    )
+
+                    # 递归处理子评论
+                    sub_comments = comment_data.get("sub_comments", [])
+                    if isinstance(sub_comments, list) and sub_comments:
+                        result.extend(
+                            collect_comments_recursively(
+                                sub_comments, parent_id=str(comment_id), level=level + 1
+                            )
+                        )
+
+                return result
+
+            all_comments_to_process = collect_comments_recursively(note_all_comment)
+
+            # 按层级排序，确保先处理父评论
+            all_comments_to_process.sort(key=lambda x: x["level"])
+
+            # 处理所有评论
+            for comment_item in all_comments_to_process:
+                comment_data = comment_item["data"]
+                parent_id = comment_item["parent_id"]
+
                 comment_id = comment_data.get("id")
                 if not comment_id:
-                    logger.warning(f"跳过缺少 'id' 的评论数据: {comment_data}")
-                    return
+                    continue
 
                 comment_id_str = str(comment_id)
                 if comment_id_str in processed_comment_ids:
-                    return  # 防止因数据源问题导致的无限递归或重复处理
+                    continue
                 processed_comment_ids.add(comment_id_str)
 
+                # 准备评论数据
                 user_info = comment_data.get("user_info", {})
-                note_id = comment_data.get("note_id")  # 评论数据中通常包含 note_id
+                note_id = comment_data.get("note_id")
 
-                # 安全地获取和转换数据
                 create_time_ms = comment_data.get("create_time")
                 comment_create_time = None
                 if create_time_ms:
                     try:
-                        # 假设 create_time 是毫秒级时间戳
                         comment_create_time = datetime.fromtimestamp(
                             int(create_time_ms) / 1000
                         )
-                    except (
-                        ValueError,
-                        TypeError,
-                        OverflowError,
-                    ) as e:  # 添加 OverflowError
+                    except (ValueError, TypeError, OverflowError) as e:
                         logger.warning(
                             f"解析评论 {comment_id_str} 创建时间戳失败 ({create_time_ms}): {e}"
                         )
@@ -370,13 +448,11 @@ class CommentDAO:
                     else 0
                 )
 
-                sub_comment_count_str = comment_data.get("sub_comment_count", "0")
-                # 注意：顶层评论的 sub_comment_count 可能直接是子评论列表长度
                 sub_comments_list = comment_data.get("sub_comments", [])
                 actual_sub_comment_count = (
                     len(sub_comments_list) if isinstance(sub_comments_list, list) else 0
                 )
-                # 使用 API 返回的值（如果可靠）或实际列表长度
+                sub_comment_count_str = comment_data.get("sub_comment_count", "0")
                 comment_sub_comment_count = (
                     int(sub_comment_count_str)
                     if isinstance(sub_comment_count_str, str)
@@ -387,29 +463,11 @@ class CommentDAO:
                 comment_show_tags = None
                 show_tags_data = comment_data.get("show_tags")
                 if show_tags_data and isinstance(show_tags_data, list):
-                    try:
-                        comment_show_tags = json.dumps(
-                            show_tags_data, ensure_ascii=False
-                        )
-                    except TypeError as e:
-                        logger.warning(
-                            f"序列化评论 {comment_id_str} 的 show_tags 失败 ({show_tags_data}): {e}"
-                        )
+                    comment_show_tags = show_tags_data
 
-                # 从 target_comment 中获取 parent_id (如果存在且是子评论)
-                target_comment_info = comment_data.get("target_comment")
-                effective_parent_id = parent_id  # 默认使用传入的 parent_id
-                if target_comment_info and isinstance(target_comment_info, dict):
-                    parent_id_from_target = target_comment_info.get("id")
-                    if parent_id_from_target:
-                        effective_parent_id = str(
-                            parent_id_from_target
-                        )  # 优先使用 target_comment 的 ID 作为 parent_id
-
-                # 准备评论数据字典
                 comment_db_data = {
                     "note_id": str(note_id) if note_id else None,
-                    "parent_comment_id": effective_parent_id,
+                    "parent_comment_id": parent_id,
                     "comment_user_id": (
                         str(user_info.get("user_id"))
                         if user_info.get("user_id")
@@ -417,10 +475,7 @@ class CommentDAO:
                     ),
                     "comment_user_image": user_info.get("image"),
                     "comment_user_nickname": user_info.get("nickname"),
-                    # 假设 user_info 中没有 home_page_url，尝试从 target_comment 的 user_info 获取（如果需要）
-                    "comment_user_home_page_url": user_info.get(
-                        "home_page_url"
-                    ),  # 假设爬虫数据结构中有
+                    "comment_user_home_page_url": user_info.get("home_page_url"),
                     "comment_content": comment_data.get("content"),
                     "comment_like_count": comment_like_count,
                     "comment_sub_comment_count": comment_sub_comment_count,
@@ -437,170 +492,132 @@ class CommentDAO:
                         str(comment_data.get("ip_location"))
                         if comment_data.get("ip_location")
                         else None
-                    ),  # 尝试获取ip_location
+                    ),
                 }
-                # 不过滤，允许用 None 更新
-                comment_db_data_filtered = comment_db_data
 
-                # 获取或创建/更新评论记录
                 existing_comment = existing_comments.get(comment_id_str)
-                comment_obj = None
-                is_new = False
-                if existing_comment:
-                    # 更新
-                    is_updated = False
-                    for key, value in comment_db_data_filtered.items():
-                        if (
-                            hasattr(existing_comment, key)
-                            and getattr(existing_comment, key) != value
-                        ):
-                            setattr(existing_comment, key, value)
-                            is_updated = True
-                    if is_updated:
-                        existing_comment.updated_at = datetime.now()
-                        updated_count += 1
-                    comment_obj = existing_comment
 
-                else:
-                    # 创建
-                    # 需要确保所有必需字段存在，或者数据库允许 NULL
-                    if not comment_db_data_filtered.get("note_id"):
-                        logger.warning(f"评论 {comment_id_str} 缺少 note_id，无法创建")
-                        return
-                    if not comment_db_data_filtered.get("comment_user_id"):
-                        logger.warning(f"评论 {comment_id_str} 缺少 user_id，无法创建")
-                        return
+                comment_obj, is_new, is_updated = (
+                    await CommentDAO._save_comment_instance(
+                        db, comment_id_str, comment_db_data, existing_comment
+                    )
+                )
 
-                    comment_obj = XhsComment(
-                        comment_id=comment_id_str, **comment_db_data_filtered
-                    )
-                    db.add(comment_obj)
-                    # 执行flush确保评论实体已创建并分配ID
-                    await db.flush()
-                    existing_comments[comment_id_str] = (
-                        comment_obj  # 添加到缓存，以便子评论查找
-                    )
+                if not comment_obj:
+                    continue
+
+                if is_new:
                     stored_count += 1
-                    is_new = True
+                    # 无需调用 db.flush()，保存到待处理列表
+                    existing_comments[comment_id_str] = comment_obj
+                elif is_updated:
+                    updated_count += 1
 
-                # 处理 @ 用户 (只有在 comment_obj 有效时才处理)
-                if comment_obj:
-                    at_users_data = comment_data.get("at_users", [])
-                    if (
-                        isinstance(at_users_data, list) and at_users_data
-                    ):  # 仅当列表非空时处理
-                        try:
-                            # 先查询现有的 @ 用户关系 ID (改为异步查询)
-                            stmt = select(XhsCommentAtUser.at_user_id).filter(
-                                XhsCommentAtUser.comment_id == comment_id_str
+                # 收集 @ 用户数据，但不立即处理
+                at_users_data = comment_data.get("at_users", [])
+                if isinstance(at_users_data, list) and at_users_data:
+                    pending_at_user_operations.append(
+                        {"comment_id": comment_id_str, "at_users": at_users_data}
+                    )
+
+            # 在所有评论都处理完后，一次性flush，确保评论ID可用
+            try:
+                await db.flush()
+                logger.info(f"已处理 {len(processed_comment_ids)} 条评论")
+            except Exception as flush_err:
+                logger.error(f"批量提交评论时出错: {flush_err}", exc_info=True)
+                # 尝试继续处理@用户关系，有些评论可能已经成功添加
+
+            # 处理所有@用户关系
+            successful_at_user_count = 0
+            try:
+                for at_user_operation in pending_at_user_operations:
+                    comment_id = at_user_operation["comment_id"]
+                    at_users = at_user_operation["at_users"]
+
+                    # 查询现有的@用户关系
+                    try:
+                        stmt = select(XhsCommentAtUser.at_user_id).filter(
+                            XhsCommentAtUser.comment_id == comment_id
+                        )
+                        result = await db.execute(stmt)
+                        existing_at_user_ids = {row[0] for row in result.all()}
+                        current_at_user_ids = set()
+
+                        for at_user_data in at_users:
+                            if isinstance(at_user_data, dict):
+                                at_user_id = at_user_data.get("user_id")
+                                if at_user_id:
+                                    at_user_id_str = str(at_user_id)
+                                    current_at_user_ids.add(at_user_id_str)
+
+                                    if at_user_id_str not in existing_at_user_ids:
+                                        # 创建新的 @ 用户关系
+                                        at_user_db = XhsCommentAtUser(
+                                            comment_id=comment_id,
+                                            at_user_id=at_user_id_str,
+                                            at_user_nickname=at_user_data.get(
+                                                "nickname"
+                                            ),
+                                            at_user_home_page_url=at_user_data.get(
+                                                "home_page_url"
+                                            ),
+                                        )
+                                        db.add(at_user_db)
+                                        successful_at_user_count += 1
+
+                        # 删除不再存在的 @ 用户关系
+                        ids_to_delete = existing_at_user_ids - current_at_user_ids
+                        if ids_to_delete:
+                            stmt = select(XhsCommentAtUser).filter(
+                                XhsCommentAtUser.comment_id == comment_id,
+                                XhsCommentAtUser.at_user_id.in_(ids_to_delete),
                             )
                             result = await db.execute(stmt)
-                            existing_at_user_ids = {row[0] for row in result.all()}
-                            current_at_user_ids = set()
+                            for at_user in result.scalars().all():
+                                await db.delete(at_user)
+                    except Exception as e_at:
+                        logger.warning(f"处理评论 {comment_id} 的 @ 用户时出错: {e_at}")
+                        # 继续处理其他@用户关系
 
-                            for at_user_data in at_users_data:
-                                if isinstance(at_user_data, dict):
-                                    at_user_id = at_user_data.get("user_id")
-                                    if at_user_id:
-                                        at_user_id_str = str(at_user_id)
-                                        current_at_user_ids.add(at_user_id_str)
-                                        if at_user_id_str not in existing_at_user_ids:
-                                            # 创建新的 @ 用户关系
-                                            at_user_db = XhsCommentAtUser(
-                                                comment_id=comment_id_str,
-                                                at_user_id=at_user_id_str,
-                                                at_user_nickname=at_user_data.get(
-                                                    "nickname"
-                                                ),
-                                                at_user_home_page_url=at_user_data.get(
-                                                    "home_page_url"
-                                                ),
-                                            )
-                                            db.add(at_user_db)
-                                else:
-                                    logger.warning(
-                                        f"评论 {comment_id_str} 的 at_users 列表包含非字典元素: {at_user_data}"
-                                    )
+                # 批量提交@用户关系
+                await db.flush()
+                logger.info(f"成功处理 {successful_at_user_count} 条@用户关系")
+            except Exception as at_user_err:
+                logger.error(f"批量处理@用户关系时出错: {at_user_err}", exc_info=True)
+                # 继续提交已处理的数据
 
-                            # 删除不再存在的 @ 用户关系 (使用异步方式)
-                            ids_to_delete = existing_at_user_ids - current_at_user_ids
-                            if ids_to_delete:
-                                stmt = select(XhsCommentAtUser).filter(
-                                    XhsCommentAtUser.comment_id == comment_id_str,
-                                    XhsCommentAtUser.at_user_id.in_(ids_to_delete),
-                                )
-                                result = await db.execute(stmt)
-                                for at_user in result.scalars().all():
-                                    await db.delete(at_user)
-
-                        except Exception as e_at:
-                            logger.error(
-                                f"处理评论 {comment_id_str} 的 @ 用户时出错: {e_at}",
-                                exc_info=True,
-                            )
-                            # 可以选择回滚部分操作或继续，这里选择继续
-
-                    elif at_users_data:  # 如果字段存在但不是列表
-                        logger.warning(
-                            f"评论 {comment_id_str} 的 at_users 字段不是列表: {at_users_data}"
-                        )
-
-                # 递归处理子评论 (并行异步处理)
-                sub_comments_list = comment_data.get("sub_comments", [])
-                if isinstance(sub_comments_list, list) and sub_comments_list:
-                    # 使用asyncio.gather进行并行处理子评论
-                    import asyncio
-
-                    sub_comment_tasks = []
-                    for sub_comment_data in sub_comments_list:
-                        if isinstance(sub_comment_data, dict):
-                            # 传入当前评论的 ID 作为子评论的 parent_id
-                            sub_comment_tasks.append(
-                                _process_and_store_comment_async(
-                                    sub_comment_data, parent_id=comment_id_str
-                                )
-                            )
-                        else:
-                            logger.warning(
-                                f"主评论 {comment_id_str} 的 sub_comments 列表包含非字典元素: {sub_comment_data}"
-                            )
-
-                    # 等待所有子评论处理完成
-                    if sub_comment_tasks:
-                        await asyncio.gather(*sub_comment_tasks)
-                elif sub_comments_list:  # 如果字段存在但不是列表
-                    logger.warning(
-                        f"主评论 {comment_id_str} 的 sub_comments 字段不是列表: {sub_comments_list}"
-                    )
-
-            # 4. 并行处理主评论
-            import asyncio
-
-            main_comment_tasks = []
-            logger.info(f"开始处理 {len(note_all_comment)} 条主评论及其子评论")
-
-            for main_comment_data in note_all_comment:
-                if isinstance(main_comment_data, dict):
-                    main_comment_tasks.append(
-                        _process_and_store_comment_async(main_comment_data)
-                    )
-                else:
-                    logger.warning(
-                        f"输入的主评论列表包含非字典元素: {main_comment_data}"
-                    )
-
-            # 并行执行所有主评论处理任务
-            if main_comment_tasks:
-                await asyncio.gather(*main_comment_tasks)
-
-            # 5. 提交事务
-            await db.commit()  # 异步提交所有更改
-            logger.info(
-                f"成功处理评论，新增 {stored_count} 条，更新 {updated_count} 条，总处理评论数: {len(processed_comment_ids)}"
-            )
+            # 最终提交事务
+            try:
+                await db.commit()
+                logger.info(
+                    f"成功处理评论，新增 {stored_count} 条，更新 {updated_count} 条，总处理评论数: {len(processed_comment_ids)}"
+                )
+            except Exception as commit_err:
+                await db.rollback()
+                logger.error(f"提交事务时出错: {commit_err}", exc_info=True)
+                logger.warning("由于事务提交错误，已处理的数据未能成功存储")
 
         except Exception as e:
-            await db.rollback()  # 发生任何错误时异步回滚事务
+            try:
+                await db.rollback()
+            except Exception as rollback_err:
+                logger.error(f"回滚事务时出错: {rollback_err}", exc_info=True)
+
             error_detail = f"{str(e)}\n{''.join(traceback.format_tb(e.__traceback__))}"
             logger.error(f"从爬虫存储评论过程中发生错误: {error_detail}")
-            # 此处不应再次 raise，避免中断调用流程
+            # 此处不再抛出异常，而是返回已处理的数量
+            return {
+                "processed": len(processed_comment_ids),
+                "stored": stored_count,
+                "updated": updated_count,
+                "success": False,
+                "error": str(e),
+            }
+
+        return {
+            "processed": len(processed_comment_ids),
+            "stored": stored_count,
+            "updated": updated_count,
+            "success": True,
+        }

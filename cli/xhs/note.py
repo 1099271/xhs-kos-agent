@@ -1,8 +1,6 @@
 import typer
 import asyncio
 
-# import click # No longer directly needed
-
 app = typer.Typer()
 
 from app.utils.logger import app_logger as logger
@@ -62,13 +60,14 @@ def get_note_detail_cli(
         help="使用爬虫替代Coze获取笔记详情（默认使用Coze）",
     )
 ):
+    """
+    补全没有笔记详情的笔记内容
+    """
     if use_crawler:
         use_coze = False
     else:
         use_coze = True
-    """
-    补全没有详情内容的笔记
-    """
+
     asyncio.run(get_note_detail_cli_async(use_coze))
 
 
@@ -103,5 +102,4 @@ def get_xhs_note_comments_cli(
 
 async def get_note_comments_cli_async(use_coze: bool = False):
     logger.info(f"正在获取笔记评论内容，使用{'Coze API' if use_coze else '爬虫'}")
-    processed_count = await finish_note_comments(use_coze=use_coze)
-    logger.info(f"完成笔记评论内容获取，共处理 {processed_count} 条笔记")
+    await finish_note_comments(use_coze=use_coze)

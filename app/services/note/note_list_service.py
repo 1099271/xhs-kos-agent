@@ -142,7 +142,7 @@ async def finish_note_detail(use_coze: bool = False):
                     logger.error(f"处理笔记 {note_id} 时出错: {str(e)}")
 
                 # 随机等待1-5秒
-                sleep_time = random.randint(1, 3)
+                sleep_time = random.randint(5, 10)
                 logger.info(f"等待 {sleep_time} 秒后继续...")
                 time.sleep(sleep_time)
 

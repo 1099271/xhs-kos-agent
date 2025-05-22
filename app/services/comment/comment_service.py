@@ -44,7 +44,6 @@ async def finish_note_comments(use_coze: bool = False):
                 AND (c.note_id IS NULL OR c.actual_comment_count = 0);
             """
             )
-            processed_count = 0
             result = await db.execute(stmt)
             notes_to_process = result.all()
             logger.info(f"找到 {len(notes_to_process)} 条需要补全详情的笔记")
@@ -56,27 +55,16 @@ async def finish_note_comments(use_coze: bool = False):
                 try:
                     logger.info(f"处理第 {index} 条笔记: {note_url}")
                     if use_coze:
-                        note_comments = await get_note_comments_by_coze(
-                            note_url, comment_count
-                        )
+                        await get_note_comments_by_coze(note_url, comment_count)
                     else:
-                        note_comments = await get_note_comments_by_spider(
-                            note_url, comment_count
-                        )
-
-                    if note_comments:
-                        processed_count += 1
-                    else:
-                        logger.warning(f"获取笔记详情页失败: {note_url}")
+                        await get_note_comments_by_spider(note_url, comment_count)
                 except Exception as e:
                     logger.error(f"处理笔记 {note_id} 时出错: {str(e)}")
 
                 # 随机等待1-5秒
-                sleep_time = random.randint(1, 3)
+                sleep_time = random.randint(5, 12)
                 logger.info(f"等待 {sleep_time} 秒后继续...")
                 time.sleep(sleep_time)
-
-            logger.info("完成笔记详情补全任务")
 
         except Exception as e:
             logger.error(f"处理笔记详情时出错: {e}")
