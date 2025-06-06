@@ -21,6 +21,7 @@ class XhsKeywordGroup(Base):
     group_id = Column(Integer, primary_key=True, autoincrement=True, comment="群组ID")
     group_name = Column(String(100), nullable=True, comment="群组名称")
     keywords = Column(JSON, nullable=True, comment="关键词列表")
+    group_belong = Column(String(128), nullable=True, comment="群组归属")
     created_at = Column(DateTime, default=datetime.now, comment="创建时间")
 
     # 关系

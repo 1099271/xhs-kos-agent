@@ -42,7 +42,7 @@ CREATE TABLE `llm_comment_analysis` (
   UNIQUE KEY `idx_note_user` (`note_id`,`comment_user_id`) COMMENT '笔记ID和用户ID唯一索引',
   KEY `idx_note_id` (`note_id`) COMMENT '笔记ID索引',
   KEY `idx_user_id` (`comment_user_id`) COMMENT '用户ID索引'
-) ENGINE=InnoDB AUTO_INCREMENT=21927 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='小红书评论分析结果表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='小红书评论分析结果表';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -97,7 +97,7 @@ CREATE TABLE `llm_note_diagnosis` (
   `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '记录更新时间',
   PRIMARY KEY (`id`),
   KEY `idx_note_id` (`note_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=3620 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='LLM笔记诊断与反馈表，用于存储大模型对笔记的判断和反馈，包括关键词提取和数据信息';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='LLM笔记诊断与反馈表，用于存储大模型对笔记的判断和反馈，包括关键词提取和数据信息';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -202,7 +202,7 @@ CREATE TABLE `tag_comparison_results` (
   UNIQUE KEY `uk_tag_note` (`note_id`,`llm_name`,`tag_type`,`compare_model_name`),
   KEY `idx_note_llm` (`note_id`,`llm_name`),
   KEY `idx_tag_type` (`tag_type`)
-) ENGINE=InnoDB AUTO_INCREMENT=14465 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='标签对比结果表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='标签对比结果表';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -220,7 +220,7 @@ CREATE TABLE `tag_standards` (
   `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '记录更新时间',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_tag_name_type` (`tag_name`,`tag_type`)
-) ENGINE=InnoDB AUTO_INCREMENT=22 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='标准标签表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='标准标签表';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -378,7 +378,7 @@ CREATE TABLE `xhs_comment_at_users` (
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '记录创建时间',
   PRIMARY KEY (`id`),
   KEY `idx_comment_id` (`comment_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=2066 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='小红书评论@用户信息表，用于存储评论中@的用户数据';
+) ENGINE=InnoDB AUTO_INCREMENT=10735 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='小红书评论@用户信息表，用于存储评论中@的用户数据';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -431,7 +431,7 @@ CREATE TABLE `xhs_keyword_group_notes` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_group_note` (`group_id`,`note_id`),
   KEY `idx_note_id` (`note_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=5210 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='关键词群与笔记关联关系表，用于记录某个关键词群查询到的帖子';
+) ENGINE=InnoDB AUTO_INCREMENT=5277 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='关键词群与笔记关联关系表，用于记录某个关键词群查询到的帖子';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -445,10 +445,11 @@ CREATE TABLE `xhs_keyword_groups` (
   `group_id` int NOT NULL AUTO_INCREMENT COMMENT '关键词群唯一标识',
   `group_name` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL COMMENT '关键词群名称或描述',
   `keywords` json DEFAULT NULL COMMENT '该关键词群包含的关键词列表（JSON 数组）',
+  `group_belong` varchar(128) DEFAULT NULL COMMENT '归属于什么项目',
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '记录创建时间',
   PRIMARY KEY (`group_id`),
   CONSTRAINT `xhs_keyword_groups_chk_1` CHECK (json_valid(`keywords`))
-) ENGINE=InnoDB AUTO_INCREMENT=27 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='关键词群表，用于存储关键词群信息';
+) ENGINE=InnoDB AUTO_INCREMENT=35 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='关键词群表，用于存储关键词群信息';
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -555,4 +556,4 @@ CREATE TABLE `xhs_topic_discussions` (
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2025-05-20 18:12:07
+-- Dump completed on 2025-06-06 19:32:34

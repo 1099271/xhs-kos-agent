@@ -69,6 +69,7 @@ class KeywordDAO:
                 keyword_group = XhsKeywordGroup(
                     group_name=unique_group_name,
                     keywords=sorted_keywords,
+                    group_belong="nfc_card",  # nfc_card:Picaa透卡/fatiaoya:发条鸭/mosuo:摩梭族
                 )
                 db.add(keyword_group)
                 await db.flush()
