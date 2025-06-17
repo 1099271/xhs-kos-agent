@@ -11,6 +11,7 @@ dependencies = [
     "langchain[anthropic,openai]>=0.3.25",
     "langgraph>=0.4.5",
     "langsmith>=0.3.42",
+    "llama-index>=0.12.42",
     "loguru>=0.7.3",
     "mcp[cli]>=1.9.0",
     "openpyxl>=3.1.5",

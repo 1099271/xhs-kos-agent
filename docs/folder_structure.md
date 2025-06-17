@@ -4,25 +4,50 @@
 xhs-kos-agent/
 ├── .venv/                     # Python 虚拟环境
 ├── apps/                      # 核心应用代码
-│   ├── agents/                # LangGraph Agent 定义
+│   ├── agents/                # LangGraph Agent 定义 (e.g., part_a_agent.py, part_b_agent.py, part_c_agent.py)
 │   ├── api/                   # FastAPI 接口 (如果需要)
 │   │   └── routers/           # API 路由
 │   ├── config/                # 应用配置模块
-│   ├── infra/                 # 基础设施代码
-│   │   └── db/                # 数据库
-│   │       └── models/        # models
-│   │   └── rag/               # RAG 相关组件
+│   ├── infra/                      # 基础设施层 (数据库、向量索引、缓存等)
+│   │   ├── db/
+│   │   │   ├── models/             # SQLAlchemy 模型 (e.g., note_models.py, user_models.py)
+│   │   │   └── dao/                # Data Access Objects (e.g., note_dao.py)
+│   │   ├── rag/                    # LlamaIndex 相关 (向量存储、索引管理)
+│   │   │   ├── vector_store.py     # 封装向量数据库操作 (e.g., FAISS, Qdrant)
+│   │   │   └── index_manager.py    # 高层索引管理接口 (加载、保存、更新、查询)
+│   │   └── cache/                  # Redis客户端配置与辅助函数
 │   ├── ingest/                # 数据提取/采集模块
-│   ├── llm_prompts/           # LLM 提示模板
+│   ├── prompts/               # LLM 提示模板
 │   ├── mcp_tools/             # MCP (Model Context Protocol) 相关工具
 │   ├── memory/                # Agent 记忆模块
-│   ├── schemas/               # Pydantic 数据模型
+│   ├── schemas/                    # Pydantic模型 (API请求/响应, AgentState等)
+│   │   └── workflow_schemas.py     # AgentState 定义 (e.g., PartA_State, PartB_State, PartC_State)
 │   ├── scripts/               # 应用主要脚本/入口
-│   ├── services/              # 核心业务服务
-│   ├── tools/                 # LangGraph Agent 工具
+│   ├── services/                   # 核心业务逻辑服务 (原子性操作)
+│   │   ├── collection/             # 数据采集相关服务
+│   │   │   ├── collection_service.py # 协调 spider_service, coze_service
+│   │   │   ├── spider_service.py     # 封装爬虫组件调用
+│   │   │   └── coze_service.py       # 封装Coze API调用
+│   │   ├── analysis/               # 数据分析相关服务
+│   │   │   ├── analysis_service.py   # 综合分析服务
+│   │   │   ├── user_targeting.py   # (可选) 用户筛选子模块
+│   │   │   └── topic_analysis.py     # (可选) 话题内容分析子模块
+│   │   ├── generation/             # 内容生成相关服务
+│   │   │   ├── content_generation_service.py # 主要文案生成服务
+│   │   │   ├── prompt_templates.py # (可选) 模板管理逻辑
+│   │   │   └── llm_client.py         # (可选) LLM API调用封装
+│   │   └── feedback/               # 反馈处理相关服务
+│   │       └── feedback_service.py   # 整体反馈处理服务
+│   ├── tools/                      # LangGraph Tools (作为Services的封装，供Agent调用)
+│   │   ├── collection_tools.py
+│   │   ├── analysis_tools.py
+│   │   ├── generation_tools.py
+│   │   └── feedback_tools.py
 │   ├── utils/                 # 通用工具函数
-│   └── workflows/             # LangGraph 工作流定义
-├── cli/                       # CLI 命令脚本
+│   └── workflows/             # LangGraph workflow 编译与图定义 (e.g., part_a_workflow.py, part_b_workflow.py, part_c_workflow.py)
+├── cli/                            # 命令行接口
+│   ├── agent_cli.py                # 用于触发和管理Agent工作流的新CLI入口
+│   └── xhs/                        # 按业务组织的CLI命令 (e.g., note.py)
 ├── docs/                      # 项目文档
 ├── logs/                      # 日志文件
 ├── scripts/                   # 辅助脚本
