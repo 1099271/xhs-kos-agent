@@ -45,6 +45,8 @@ async def get_note_detail_by_spider(note_url: str) -> dict:
     async for session in get_async_db():
         db: AsyncSession = session
         try:
+            if not note_detail:
+                return {}
             result = await NoteDAO.store_spider_note_detail(db, note_detail)
             return result
         finally:

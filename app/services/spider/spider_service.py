@@ -27,13 +27,21 @@ class SpiderService:
 
     async def get_note_detail(self, note_url: str):
         cookies_str = settings.XHS_COOKIE
-        success, msg, note_detail = self.spider_xhs.get_note_info(note_url, cookies_str)
+        success, msg, code, note_detail = self.spider_xhs.get_note_info(
+            note_url, cookies_str
+        )
         save_json_response(note_detail, "spider_get_note_detail")
 
-        if success and note_detail:
+        if success and code == 0 and note_detail:
             return note_detail
+        elif code == 300013:
+            raise SystemExit(f"爬虫触发防控规则，整体流程中止: {code}|{msg}")
+        elif code == -510000:
+            raise ValueError(f"笔记不存在: {code}|{msg}")
+        elif code == -1:
+            raise SystemExit(f"未知异常情况: {code}|{msg}")
         else:
-            logger.warning(f"获取笔记详情失败: {msg}")
+            logger.error(f"获取笔记详情失败: {code}|{msg}")
             return {}
 
     async def get_note_comments(self, note_url: str):

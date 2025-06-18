@@ -138,6 +138,9 @@ async def finish_note_detail(use_coze: bool = False):
                         processed_count += 1
                     else:
                         logger.warning(f"获取笔记详情页失败: {note_url}")
+                except ValueError as e:
+                    logger.error(f"获取笔记详情页失败: {e}")
+                    continue
                 except Exception as e:
                     logger.error(f"处理笔记 {note_id} 时出错: {str(e)}")
 
