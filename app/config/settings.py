@@ -73,7 +73,7 @@ class Settings(BaseSettings):
 
     # api key
     OPENROUTER_KEY: str = os.getenv("OPENROUTER_KEY")
-    OPENAI_KEY: str = os.getenv("OPENAI_KEY")
+    OPENAI_KEY: str = os.getenv("OPENAI_KEY", "")
 
     # 日志设置
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
@@ -81,6 +81,9 @@ class Settings(BaseSettings):
     # 系统路径设置
     PYTHONPATH: str = os.getenv("PYTHONPATH", "")
     NODE_PATH: str = os.getenv("NODE_PATH", "")
+
+    # 关键词群组归属|picaa:Picaa透卡/fatiaoya:发条鸭/mosuo:摩梭族
+    GROUP_BELONG: str = os.getenv("GROUP_BELONG", "")
 
     class Config:
         env_file = ".env"

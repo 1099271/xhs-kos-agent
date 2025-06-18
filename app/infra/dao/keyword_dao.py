@@ -6,6 +6,7 @@ from sqlalchemy import select, func
 from sqlalchemy.dialects.mysql import JSON as MySQLJSON
 from app.infra.models.keyword_models import XhsKeywordGroup
 from app.utils.logger import app_logger as logger
+from app.config.settings import settings
 
 
 class KeywordDAO:
@@ -66,10 +67,14 @@ class KeywordDAO:
             else:
                 unique_group_name = group_name or f"关键词群组-{uuid.uuid4().hex[:8]}"
 
+                belong = settings.GROUP_BELONG
+                if not belong:
+                    raise ValueError("项目归属未设置")
+
                 keyword_group = XhsKeywordGroup(
                     group_name=unique_group_name,
                     keywords=sorted_keywords,
-                    group_belong="nfc_card",  # nfc_card:Picaa透卡/fatiaoya:发条鸭/mosuo:摩梭族
+                    group_belong=belong,
                 )
                 db.add(keyword_group)
                 await db.flush()

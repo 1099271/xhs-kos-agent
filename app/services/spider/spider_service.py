@@ -1,5 +1,5 @@
 from app.config.settings import settings
-from app.ingest.xhs_spider.apis.pc_apis import XHS_Apis
+from app.ingest.xhs_spider.apis.xhs_pc_apis import XHS_Apis
 from app.utils.logger import app_logger as logger
 from app.utils.file import save_json_response
 

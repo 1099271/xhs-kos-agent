@@ -9,10 +9,10 @@ from app.infra.dao.keyword_dao import KeywordDAO
 from app.infra.dao.author_dao import AuthorDAO
 from app.schemas.note_schemas import XhsSearchResponse
 from typing import List, Dict, Any
-from datetime import datetime
+from datetime import datetime, timedelta
 import traceback
 from sqlalchemy import select
-import json
+import re
 
 from app.utils.logger import app_logger as logger
 from app.schemas.note_schemas import XhsNoteDetailResponse
@@ -433,7 +433,7 @@ class NoteDAO:
                     note_id = note_item_data.get("id")
                     note_xsec_token = str(note_item_data.get("xsec_token", ""))
                     if not note_id or not note_xsec_token:
-                        logger.logger.warning(
+                        logger.warning(
                             f"笔记缺少ID或xsec_token，跳过: {note_item_data.get('note_card', {}).get('display_title', '未知标题')}"
                         )
                         continue
@@ -443,7 +443,7 @@ class NoteDAO:
                     author_user_id = user_info.get("user_id")
 
                     if not author_user_id:
-                        logger.logger.warning(f"笔记 {note_id} 的作者ID为空，跳过处理")
+                        logger.warning(f"笔记 {note_id} 的作者ID为空，跳过处理")
                         continue
 
                     # 确保author_user_id是字符串
@@ -579,12 +579,26 @@ class NoteDAO:
                                 )
                             except ValueError:
                                 # 如果是 MM-DD 格式，添加当前年份
-                                current_year = datetime.now().year
-                                note_create_time = datetime.strptime(
-                                    f"{current_year}-{publish_time_str}", "%Y-%m-%d"
-                                )
+                                try:
+                                    current_year = datetime.now().year
+                                    note_create_time = datetime.strptime(
+                                        f"{current_year}-{publish_time_str}", "%Y-%m-%d"
+                                    )
+                                except ValueError:
+                                    # 尝试解析"x天前"格式
+                                    days_ago_match = re.match(
+                                        r"(\d+)天前", publish_time_str
+                                    )
+                                    if days_ago_match:
+                                        days = int(days_ago_match.group(1))
+                                        note_create_time = datetime.now() - timedelta(
+                                            days=days
+                                        )
+                                        logger.info(
+                                            f"解析相对时间: {publish_time_str} -> {note_create_time}"
+                                        )
                         except (ValueError, TypeError) as e:
-                            logger.logger.warning(
+                            logger.warning(
                                 f"笔记 {note_id} 的发布时间解析失败: {publish_time_str}, 错误: {str(e)}"
                             )
 
@@ -692,9 +706,7 @@ class NoteDAO:
             except Exception as e:
                 await db.rollback()
                 logger.error(f"提交事务时出错: {str(e)}\\n{traceback.format_exc()}")
-                logger.logger.warning(
-                    "由于事务提交错误，可能有部分爬虫笔记数据未能成功存储"
-                )
+                logger.warning("由于事务提交错误，可能有部分爬虫笔记数据未能成功存储")
 
         except Exception as e:
             await db.rollback()
@@ -1147,6 +1159,7 @@ class NoteDAO:
 
             # 处理标签信息
             tag_list = note_card.get("tag_list", [])
+            tag_names = None  # 初始化变量
             if tag_list:
                 tag_names = [tag.get("name") for tag in tag_list if tag.get("name")]
 

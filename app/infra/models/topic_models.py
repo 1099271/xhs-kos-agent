@@ -23,6 +23,7 @@ class XhsTopicDiscussion(Base):
     topic_type = Column(String(32), nullable=False, comment="话题类型")
     view_num = Column(Integer, nullable=False, default=0, comment="讨论量/浏览数")
     smart = Column(Boolean, nullable=False, default=False, comment="是否智能")
+    group_belong = Column(String(128), nullable=True, comment="群组归属")
     record_date = Column(DateTime, nullable=False, comment="记录日期")
     created_at = Column(DateTime, default=datetime.now, comment="创建时间")
 

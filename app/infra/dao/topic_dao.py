@@ -7,12 +7,14 @@ from sqlalchemy import select
 
 from app.infra.models.topic_models import XhsTopicDiscussion, XhsTopicsResponse
 from app.utils.logger import app_logger as logger
+from app.config.settings import settings
 
 
 class TopicDAO:
     def __init__(self):
         pass
 
+    @staticmethod
     async def store_topics(
         db: AsyncSession,
         req_info: Dict[str, Any],
@@ -59,6 +61,7 @@ class TopicDAO:
 
             # 存储话题数据
             stored_topics = []
+            belong = settings.GROUP_BELONG
 
             for topic_item in topics_data:
                 try:
@@ -89,6 +92,7 @@ class TopicDAO:
                             topic_type=topic_item.type,
                             view_num=view_num,
                             smart=smart,
+                            group_belong=belong,
                             record_date=current_date,  # Store as date object
                         )
                         db.add(new_topic)  # add is synchronous
