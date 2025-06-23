@@ -41,7 +41,8 @@ async def finish_note_comments(use_coze: bool = False):
                     GROUP BY note_id
                 ) c ON nd.note_id = c.note_id
                 WHERE nd.comment_count > 0
-                AND (c.note_id IS NULL OR c.actual_comment_count = 0);
+                AND (c.note_id IS NULL OR c.actual_comment_count = 0)
+                and nd.note_url not like '%_token=&%';
             """
             )
             result = await db.execute(stmt)
@@ -58,6 +59,9 @@ async def finish_note_comments(use_coze: bool = False):
                         await get_note_comments_by_coze(note_url, comment_count)
                     else:
                         await get_note_comments_by_spider(note_url, comment_count)
+                except ValueError as e:
+                    logger.error(f"获取笔记评论失败: {e}")
+                    continue
                 except Exception as e:
                     logger.error(f"处理笔记 {note_id} 时出错: {str(e)}")
 
@@ -115,6 +119,9 @@ async def get_note_comments_by_spider(
     """
     spider_service = SpiderService()
     note_all_comment, log_filename = await spider_service.get_note_comments(note_url)
+
+    if not note_all_comment:
+        raise ValueError(f"评论结构为空: {note_url}")
 
     async for session in get_async_db():
         db: AsyncSession = session

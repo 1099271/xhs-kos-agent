@@ -54,5 +54,4 @@ class SpiderService:
         if success and note_all_comment:
             return note_all_comment, log_filename
         else:
-            logger.warning(f"获取笔记评论失败: {msg}")
-            return [], log_filename
+            raise ValueError(f"获取笔记评论失败: {msg}")
