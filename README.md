@@ -1,290 +1,217 @@
-# XHS KOS Agent 项目
+# XHS KOS Agent - AI驱动的智能营销系统
 
-基于 LangGraph 和大语言模型构建的智能营销 Agent 系统，专门针对小红书平台的自动化内容采集、分析与用户互动。
+基于 **LlamaIndex** 和 **LangGraph** 构建的AI智能营销Agent系统，专门针对小红书平台的用户分析、内容生成和智能决策。
 
-## 📋 项目概述
+## 🎯 **核心能力**
 
-本项目旨在构建一套基于大语言模型（LLM）和 LangGraph 的智能营销 Agent 系统。该系统主要服务于小红书平台，通过自动化内容采集、分析、互动等方式，提升营销效率和效果。
+- 🧠 **AI智能用户分析** - 基于LLM和语义搜索的高价值用户识别
+- 🔍 **语义内容检索** - LlamaIndex驱动的智能文档索引和搜索
+- 📝 **智能内容策略** - AI驱动的个性化内容生成和策略制定
+- 🤖 **Multi-Agent协作** - LangGraph编排的端到端智能工作流
+- 💬 **自然语言查询** - 支持自然语言查询业务数据和洞察
 
-## 🎯 核心业务目标
+## 🚀 **快速开始**
 
-- **产品知识管理**: 根据输入信息，分析制定的产品能力，汇总输出整理成产品知识
-- **小红书笔记采集**: 根据产品定位的目标人群，采集特定的小红书笔记信息（包括笔记内容、详情、评论等）
-- **笔记分析与报告**: 对笔记信息进行判断和分析，根据各种指标生成对应报告
-- **高价值人群互动**: 对笔记中的高价值人群做漏洞筛选，根据人群偏好生成个性化评论和私信消息
-- **用户反馈收集**: 对用户的反馈做整理和收集，供后续分析和模型迭代
-
-## 🏗️ 技术架构
-
-- **核心框架**: LangGraph + LangChain
-- **Web 框架**: FastAPI
-- **数据库**: MySQL + SQLAlchemy
-- **包管理**: uv
-- **Python 版本**: >= 3.12
-- **爬虫模块**: Git Submodule (XHS Spider)
-
-## 🛠️ 快速开始
-
-### 环境要求
-
-- Python >= 3.12
-- Node.js (用于 XHS 爬虫模块)
-- MySQL 数据库
-- Git
-
-### 1. 克隆项目
-
+### **1. 环境准备**
 ```bash
-# 克隆主项目
+# 克隆项目
 git clone <repository-url>
 cd xhs-kos-agent
 
-# 初始化并更新子模块
-git submodule init
-git submodule update
-```
-
-### 2. 使用 uv 安装依赖
-
-本项目使用 [uv](https://github.com/astral-sh/uv) 作为快速的 Python 包管理器。
-
-#### 安装 uv
-
-```bash
-# macOS/Linux
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# Windows
-powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
-
-# 或使用 pip
-pip install uv
-```
-
-#### 项目环境设置
-
-```bash
-# 创建虚拟环境
-uv venv
-
-# 激活虚拟环境
-# Linux/macOS
-source .venv/bin/activate
-# Windows
-.venv\Scripts\activate
-
-# 安装项目依赖
+# 使用uv安装依赖
 uv sync
 
-# 或者直接运行（会自动创建环境）
-uv run python main.py
+# 配置环境变量
+export OPENAI_KEY="your_openai_key"
+export MYSQL_URL="mysql+aiomysql://user:pass@host:port/dbname"
 ```
 
-### 3. 配置环境变量
-
-复制环境变量模板并配置：
-
+### **2. 快速体验**
 ```bash
-cp .env.example .env
+# 测试智能用户分析
+uv run python -c "
+import asyncio
+from app.agents.enhanced_user_analyst_agent import EnhancedUserAnalystAgent
+from app.infra.db.async_database import get_session_context
+
+async def main():
+    agent = EnhancedUserAnalystAgent()
+    async with get_session_context() as session:
+        result = await agent.execute_enhanced_analysis(session)
+        print(f'✅ 分析完成: {result.retrieval_summary}')
+        
+        # 智能问答
+        answer = await agent.smart_user_query('哪些用户最活跃？')
+        print(f'🤖 AI回答: {answer}')
+
+asyncio.run(main())
+"
+
+# 测试完整AI工作流
+uv run python -c "
+import asyncio
+from app.agents.enhanced_multi_agent_workflow import EnhancedMultiAgentWorkflow
+
+async def main():
+    workflow = EnhancedMultiAgentWorkflow()
+    result = await workflow.execute_enhanced_workflow({
+        'task': 'UGC平台用户获取分析',
+        'ai_enhancement': True
+    })
+    print(f'🚀 工作流结果: {result[\"execution_summary\"]}')
+
+asyncio.run(main())
+"
 ```
 
-编辑 `.env` 文件，配置以下关键参数：
+## 🎪 **核心功能演示**
 
-```bash
-# 数据库配置
-DB_HOST=localhost
-DB_PORT=3306
-DB_USER=root
-DB_PASSWORD=your_password
-DB_NAME=xhs-kos-agent
+### **智能用户分析**
+```python
+# 识别高价值用户并获取AI洞察
+agent = EnhancedUserAnalystAgent()
+result = await agent.execute_enhanced_analysis(session, {
+    "emotional_preference": ["正向"],
+    "exclude_visited": True,
+    "ai_enhancement": True
+})
 
-# 小红书配置
-XHS_COOKIE=your_xhs_cookie
-
-# LLM 模型配置
-MODEL_API_KEY=your_api_key
-MODEL_BASE_URL=your_model_base_url
-MODEL_NAME=your_model_name
-
-# OpenAI/OpenRouter 配置（可选）
-OPENAI_KEY=your_openai_key
-OPENROUTER_KEY=your_openrouter_key
-
-# Coze API 配置
-COZE_API_TOKEN=your_coze_token
-
-# 其他配置
-DEBUG=true
-LOG_LEVEL=INFO
+print(f"发现 {len(result.high_value_users)} 个高价值用户")
+print(f"AI洞察: {result.semantic_insights}")
 ```
 
-### 4. 数据库初始化
+### **语义搜索与问答**
+```python
+# 自然语言查询业务数据
+manager = LlamaIndexManager()
 
-```bash
-# 创建数据库表
-uv run python app/scripts/init_db.py
+# 语义搜索
+results = await manager.semantic_search("高价值用户特征", top_k=5)
 
-# 或使用 CLI 工具
-uv run python cli/main.py --help
+# 智能问答
+answer = await manager.intelligent_query("用户最关心什么话题？")
+print(f"AI回答: {answer}")
 ```
 
-## 🚀 使用方法
+### **Multi-Agent智能工作流**
+```python
+# 端到端AI分析流程
+workflow = EnhancedMultiAgentWorkflow()
+result = await workflow.execute_enhanced_workflow({
+    'target_user_count': 30,
+    'content_themes': ['AI个性化', '智能推荐'],
+    'ai_enhancement': True
+})
 
-### 命令行界面 (CLI)
-
-项目提供了丰富的 CLI 工具：
-
-```bash
-# 查看所有可用命令
-uv run python cli/main.py --help
-
-# 小红书笔记相关操作
-uv run python cli/main.py xhs_note --help
-
-# LLM标签处理
-uv run python cli/main.py llm_tag --help
+# 获取综合分析结果
+print(f"用户分析: {result['user_analysis']}")
+print(f"内容策略: {result['content_strategy']}")
+print(f"AI增强摘要: {result['ai_enhancement_summary']}")
 ```
 
-### API 服务
+## 📊 **技术架构**
 
-启动 FastAPI 服务：
-
-```bash
-# 开发模式
-uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-
-# 生产模式
-uv run uvicorn app.main:app --host 0.0.0.0 --port 8000
+```mermaid
+graph TB
+    A[自然语言查询] --> B[Enhanced Multi-Agent Workflow]
+    B --> C[LlamaIndex Manager]
+    C --> D[向量索引/语义搜索]
+    
+    B --> E[Enhanced User Analyst]
+    B --> F[Content Strategy Agent]
+    B --> G[Content Generator Agent]
+    B --> H[Strategy Coordinator]
+    
+    E --> I[AI用户洞察]
+    F --> J[智能内容策略]
+    G --> K[AI内容生成]
+    H --> L[智能协调优化]
+    
+    C --> M[MySQL数据库]
+    E --> M
+    F --> M
+    G --> M
+    H --> M
 ```
 
-访问 API 文档：
+## 🛠️ **系统特性**
 
-- Swagger UI: http://localhost:8000/docs
-- ReDoc: http://localhost:8000/redoc
+### **AI智能增强**
+- ✅ **LlamaIndex集成** - 智能文档索引和语义搜索
+- ✅ **多模型支持** - OpenAI、OpenRouter、Anthropic等
+- ✅ **智能问答系统** - 自然语言查询业务数据
+- ✅ **AI洞察生成** - 深度用户行为分析和建议
 
-## 📁 项目结构
+### **Multi-Agent协作**
+- ✅ **LangGraph工作流** - 状态驱动的Agent编排
+- ✅ **增强版用户分析** - 传统分析+AI语义搜索
+- ✅ **智能内容策略** - AI驱动的策略制定
+- ✅ **自动化协调** - 智能任务分配和优化
+
+### **企业级特性**
+- ✅ **异步架构** - 高性能异步操作设计
+- ✅ **健壮性** - 完整的错误处理和恢复机制
+- ✅ **可扩展性** - 模块化设计，易于扩展
+- ✅ **测试覆盖** - 全面的测试套件
+
+## 📁 **项目结构**
 
 ```
 xhs-kos-agent/
-├── app/                    # 主应用代码
-│   ├── agents/            # LangGraph Agents
-│   ├── api/               # FastAPI 路由
-│   ├── config/            # 配置文件
-│   ├── infra/             # 基础设施层
-│   │   ├── dao/          # 数据访问对象
-│   │   ├── db/           # 数据库连接
-│   │   ├── models/       # 数据库模型
-│   │   └── rag/          # RAG 相关
-│   ├── ingest/            # 数据采集模块
-│   │   └── xhs_spider/   # 小红书爬虫 (Git Submodule)
-│   ├── services/          # 业务服务层
-│   ├── schemas/           # Pydantic 数据模型
-│   └── workflows/         # LangGraph 工作流
-├── cli/                   # 命令行工具
-├── docs/                  # 项目文档
-└── examples/              # 使用示例
+├── app/
+│   ├── agents/                 # AI Agent系统
+│   │   ├── llamaindex_manager.py          # LlamaIndex智能索引
+│   │   ├── enhanced_user_analyst_agent.py # 增强版用户分析
+│   │   ├── enhanced_multi_agent_workflow.py # AI工作流
+│   │   └── llm_manager.py                 # LLM模型管理
+│   ├── prompts/               # AI提示词管理
+│   ├── infra/                 # 基础设施层
+│   └── config/                # 配置管理
+├── docs/                      # 项目文档
+│   ├── USAGE_GUIDE.md        # 详细使用指南
+│   ├── PROJECT_SUMMARY.md    # 项目技术总结
+│   └── system_design.md      # 系统设计文档
+├── test/                      # 测试套件
+└── cli/                       # 命令行工具
 ```
 
-## 🔧 Git Submodule 管理
-
-项目使用 Git Submodule 管理小红书爬虫模块：
-
-### 子模块信息
-
-- **路径**: `app/ingest/xhs_spider`
-- **仓库**: `git@github.com:1099271/Spider_XHS.git`
-- **分支**: `dev_kos`
-
-### 常用子模块命令
+## 🧪 **测试验证**
 
 ```bash
-# 查看子模块状态
-git submodule status
+# 运行完整测试套件
+uv run python test/test_llamaindex_manager.py    # LlamaIndex测试
+uv run python test/test_enhanced_multi_agent_workflow.py  # AI工作流测试
 
-# 更新子模块到最新版本
-git submodule update --remote
-
-# 更新特定子模块
-git submodule update --remote app/ingest/xhs_spider
-
-# 在子模块中切换分支
-cd app/ingest/xhs_spider
-git checkout dev_kos
-cd ../../..
-
-# 推送子模块更改
-git add app/ingest/xhs_spider
-git commit -m "Update xhs_spider submodule"
-git push
+# 快速功能验证
+uv run python test/test_enhanced_quick.py        # 快速功能测试
+uv run python test/test_llm_quick.py            # LLM连接测试
 ```
 
-## 🔍 开发指南
+## 📚 **文档资源**
 
-### 使用 uv 进行开发
+- 📖 **[详细使用指南](docs/USAGE_GUIDE.md)** - 完整的功能介绍和代码示例
+- 🏗️ **[项目技术总结](docs/PROJECT_SUMMARY.md)** - 技术架构和开发历程
+- 🎯 **[系统设计文档](docs/system_design.md)** - 系统架构设计
+- 🗂️ **[项目结构说明](docs/folder_structure.md)** - 代码组织结构
 
-```bash
-# 添加新依赖
-uv add package-name
+## 🎯 **实际应用**
 
-# 添加开发依赖
-uv add --dev package-name
+这个系统可以帮助你：
+- 🎯 **精准识别**高价值用户和潜在客户
+- 🧠 **智能分析**用户行为模式和内容偏好
+- 📝 **自动生成**个性化内容策略和营销方案
+- 🔍 **语义搜索**历史数据，快速获取业务洞察
+- 💬 **自然语言**查询复杂业务问题
+- 🤖 **AI协作**多个智能体协同工作
 
-# 移除依赖
-uv remove package-name
+## 🚨 **系统要求**
 
-# 运行脚本
-uv run python script.py
+- **Python**: >= 3.12
+- **依赖管理**: uv (推荐) 或 pip
+- **数据库**: MySQL >= 8.0
+- **API Keys**: OpenAI/OpenRouter/Anthropic (任选其一)
 
-# 运行特定命令
-uv run --with package-name command
-
-# 查看依赖树
-uv tree
-```
-
-### 代码风格
-
-项目遵循以下最佳实践：
-
-- 使用 Python 3.12+ 的新特性
-- 遵循 PEP 8 代码规范
-- 使用 Type Hints
-- 异步编程优先
-- 模块化设计
-
-### 测试
-
-```bash
-# 运行测试
-uv run pytest
-
-# 运行特定测试
-uv run pytest tests/test_specific.py
-
-# 生成覆盖率报告
-uv run pytest --cov=app
-```
-
-## 📊 项目状态
-
-项目当前处于早期设计和开发阶段。
-
-### 已实现功能
-
-- [x] 基础项目架构
-- [x] 数据库模型设计
-- [x] CLI 工具框架
-- [x] FastAPI 基础设置
-- [x] 小红书爬虫集成
-
-### 开发中功能
-
-- [ ] LangGraph Agents 实现
-- [ ] 用户行为分析服务
-- [ ] 内容生成与优化
-- [ ] 自动化互动流程
-
-## 🤝 贡献指南
+## 🤝 **贡献指南**
 
 1. Fork 项目
 2. 创建功能分支 (`git checkout -b feature/AmazingFeature`)
@@ -292,21 +219,8 @@ uv run pytest --cov=app
 4. 推送到分支 (`git push origin feature/AmazingFeature`)
 5. 开启 Pull Request
 
-## 📄 许可证
+---
 
-本项目采用 MIT 许可证。详细信息请查看 [LICENSE](LICENSE) 文件。
+**🚀 Ready to revolutionize your UGC platform with AI? Let's get started!**
 
-## 📞 联系方式
-
-如有问题或建议，请通过以下方式联系：
-
-- 创建 Issue
-- 发送邮件至项目维护者
-
-## 🔗 相关链接
-
-- [系统设计文档](docs/system_design.md)
-- [项目结构说明](docs/folder_structure.md)
-- [数据库结构](docs/database_structure.sql)
-- [LangGraph 官方文档](https://langchain-ai.github.io/langgraph/)
-- [uv 官方文档](https://github.com/astral-sh/uv)
+> 💡 **提示**: 查看 [详细使用指南](docs/USAGE_GUIDE.md) 了解完整功能和使用方法

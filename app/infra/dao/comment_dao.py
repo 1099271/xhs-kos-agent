@@ -255,6 +255,7 @@ class CommentDAO:
 
         return at_user
 
+    @staticmethod
     async def store_spider_note_detail(
         db: AsyncSession, note_all_comment: List[XhsCommentItem], log_filename: str
     ):
@@ -309,6 +310,7 @@ class CommentDAO:
             db.add(new_comment)
             return new_comment, True, False
 
+    @staticmethod
     async def store_comments_from_spider(
         db: AsyncSession, note_all_comment: List[Dict[str, Any]]
     ):
