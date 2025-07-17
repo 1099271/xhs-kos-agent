@@ -74,7 +74,7 @@ class Settings(BaseSettings):
     # api key
     OPENROUTER_KEY: str = os.getenv("OPENROUTER_KEY")
     OPENAI_KEY: str = os.getenv("OPENAI_KEY", "")
-    ANTHROPIC_API_KEY: str = os.getenv("ANTHROPIC_API_KEY", "")
+    ANTHROPIC_KEY: str = os.getenv("ANTHROPIC_KEY", "")
     ANTHROPIC_URL: str = os.getenv("ANTHROPIC_URL", "")
 
     # 日志设置

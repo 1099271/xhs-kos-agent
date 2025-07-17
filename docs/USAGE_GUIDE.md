@@ -11,7 +11,7 @@ uv sync
 # 配置环境变量 (参考 app/config/settings.py)
 export OPENAI_KEY="your_openai_key"
 export OPENROUTER_KEY="your_openrouter_key"
-export ANTHROPIC_API_KEY="your_anthropic_key"
+export ANTHROPIC_KEY="your_anthropic_key"
 export MYSQL_URL="mysql+aiomysql://user:pass@host:port/dbname"
 ```
 

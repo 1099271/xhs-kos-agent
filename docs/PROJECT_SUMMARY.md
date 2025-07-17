@@ -183,7 +183,7 @@ graph TB
 uv add langchain-anthropic langchain-openai langgraph
 
 # 配置环境变量
-ANTHROPIC_API_KEY=your_token
+ANTHROPIC_KEY=your_token
 OPENROUTER_KEY=your_key
 DB_HOST=localhost
 DB_USER=your_user

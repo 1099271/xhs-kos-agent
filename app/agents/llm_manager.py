@@ -38,10 +38,10 @@ class LLMModelManager:
         """初始化所有可用的模型"""
 
         # 1. 尝试初始化Anthropic (通过anyrouter)
-        if settings.ANTHROPIC_API_KEY and settings.ANTHROPIC_URL:
+        if settings.ANTHROPIC_KEY and settings.ANTHROPIC_URL:
             try:
                 self.models[ModelProvider.ANTHROPIC] = ChatAnthropic(
-                    api_key=settings.ANTHROPIC_API_KEY,
+                    api_key=settings.ANTHROPIC_KEY,
                     base_url=settings.ANTHROPIC_URL,
                     model="claude-3-5-sonnet-20241022",
                     temperature=0.7,
