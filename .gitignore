@@ -25,3 +25,6 @@ build/
 
 # 环境变量文件
 .env
+
+# 测试文件
+.pytest_cache/
