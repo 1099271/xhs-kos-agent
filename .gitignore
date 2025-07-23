@@ -25,3 +25,10 @@ build/
 
 # 环境变量文件
 .env
+
+# 测试文件
+test/
+test_storage/
+
+# langGraph 运行文件
+.langgraph_api/

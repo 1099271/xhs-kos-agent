@@ -85,6 +85,8 @@ class Settings(BaseSettings):
     # 关键词群组归属|picaa:Picaa透卡/fatiaoya:发条鸭/mosuo:摩梭族
     GROUP_BELONG: str = os.getenv("GROUP_BELONG", "")
 
+    LANGSMITH_API_KEY: str = os.getenv("LANGSMITH_API_KEY")
+
     class Config:
         env_file = ".env"
         case_sensitive = True
